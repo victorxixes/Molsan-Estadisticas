@@ -6,10 +6,12 @@
 
     <!-- CSS PRINCIPAL -->
     <link rel="stylesheet" href="css/molsan.css">
+    <link rel="stylesheet" href="css/ctn.css">
 
     <!-- Librerías externas -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
         window.v = Date.now(); /* Romper caché */
@@ -46,6 +48,11 @@
         <li class="menu-item" onclick="cargarModulo('listado')">
             <span class="icon">📄</span>
             <span class="text">Listado</span>
+        </li>
+
+        <li class="menu-item" onclick="cargarModulo('ctn')">
+            <span class="icon">CTN</span>
+            <span class="text">Catálogo notarial</span>
         </li>
 
         <!-- CONFIGURACIÓN (CONTENEDOR) -->
@@ -1362,6 +1369,79 @@
 </template>
 
 
+
+<!-- MÓDULO CTN — CATÁLOGO NOTARIAL EN SUPABASE -->
+<template id="tpl-ctn">
+    <div id="ctn-root" class="modulo-wrapper fade-in ctn-root">
+        <header class="ctn-page-header">
+            <div class="ctn-header-identity"><div class="ctn-mark" aria-hidden="true">CTN</div>
+                <div><p class="ctn-eyebrow">MOLSAN · ESTADÍSTICAS</p><h2>Catálogo notarial</h2>
+                    <p class="ctn-muted">Consulta, administra e importa el catálogo CTN conectado a Supabase.</p></div>
+            </div>
+            <div id="ctn-header-actions" class="ctn-header-actions" hidden>
+                <button type="button" class="m-btn m-btn-soft m-btn-round" data-ctn-action="import-toggle">Importar Excel</button>
+                <button type="button" class="m-btn m-btn-primary m-btn-round" data-ctn-action="new">Nuevo notario</button>
+                <button type="button" class="m-btn m-btn-soft m-btn-round" data-ctn-action="refresh">Actualizar</button>
+                <button type="button" class="m-btn m-btn-soft m-btn-round" data-ctn-action="logout">Salir</button>
+            </div>
+        </header>
+        <div id="ctn-auth" class="ctn-panel" hidden></div>
+        <div id="ctn-app" hidden>
+            <section id="ctn-import-panel" class="ctn-panel" hidden>
+                <div class="ctn-panel-heading"><div><h3>Importar catálogo CTN</h3><p class="ctn-muted">Excel validado, actualización por código y sin borrado masivo.</p></div></div>
+                <div class="ctn-form-grid"><label>Fichero Excel<input id="ctn-excel-file" class="m-input" type="file" accept=".xlsx,.xlsm,.xls"></label></div>
+                <div class="ctn-filter-actions"><button type="button" class="m-btn m-btn-primary m-btn-round" data-ctn-action="preview-import">Validar y previsualizar</button></div>
+                <div id="ctn-import-result" aria-live="polite"></div>
+            </section>
+            <div id="ctn-operation-message" aria-live="polite"></div>
+            <section class="ctn-panel">
+                <div class="ctn-panel-heading"><div><h3>Filtros de búsqueda</h3><p class="ctn-muted">Código, nombre, NIF, provincia y municipio.</p></div></div>
+                <form id="ctn-filter-form">
+                    <div class="ctn-filter-grid">
+                        <label>Buscar notario<input class="m-input" name="q" placeholder="Nombre, apellidos, NIF o código"></label>
+                        <label>Provincia<input class="m-input" name="provincia" placeholder="Provincia"></label>
+                        <label>Municipio<input class="m-input" name="municipio" placeholder="Municipio"></label>
+                        <label>Videoconferencia<select class="m-input" name="vc"><option value="">Todos</option><option value="si">Sí</option><option value="no">No</option></select></label>
+                    </div>
+                    <div class="ctn-filter-actions">
+                        <button type="button" class="m-btn m-btn-soft m-btn-round" data-ctn-action="clear-filters">Limpiar</button>
+                        <button type="submit" class="m-btn m-btn-primary m-btn-round">Buscar</button>
+                    </div>
+                </form>
+            </section>
+            <div class="ctn-summary-grid">
+                <div class="ctn-summary-card"><span>Total de registros</span><strong id="ctn-total">—</strong></div>
+                <div class="ctn-summary-card"><span>Vista actual</span><strong id="ctn-range">—</strong></div>
+                <div class="ctn-summary-card"><span>Paginación</span><strong id="ctn-page-label">—</strong></div>
+            </div>
+            <section class="ctn-panel">
+                <div class="ctn-panel-heading"><div><h3>Notarios y notarías</h3><p class="ctn-muted">Ficha profesional y asociaciones disponibles.</p></div></div>
+                <div class="ctn-table-wrap"><div class="ctn-table-scroll"><table class="ctn-table">
+                    <thead><tr>
+                        <th><button type="button" data-ctn-sort="codigo">Código ↕</button></th>
+                        <th><button type="button" data-ctn-sort="apellidos">Notario ↕</button></th>
+                        <th><button type="button" data-ctn-sort="nif">NIF ↕</button></th>
+                        <th><button type="button" data-ctn-sort="municipio">Municipio ↕</button></th>
+                        <th><button type="button" data-ctn-sort="provincia">Provincia ↕</button></th>
+                        <th><button type="button" data-ctn-sort="vc">VC ↕</button></th>
+                        <th><button type="button" data-ctn-sort="apoderado">Apoderado ↕</button></th>
+                        <th>Teléfono</th><th>Ficha</th>
+                    </tr></thead>
+                    <tbody id="ctn-table-body"><tr><td colspan="9" class="ctn-empty">Iniciando catálogo…</td></tr></tbody>
+                </table></div></div>
+                <div class="ctn-pagination"><span id="ctn-range-bottom">—</span><div class="ctn-pagination-actions">
+                    <button type="button" class="m-btn m-btn-soft m-btn-round ctn-small-btn" data-ctn-action="first">« Primera</button>
+                    <button type="button" class="m-btn m-btn-soft m-btn-round ctn-small-btn" data-ctn-action="prev">‹ Anterior</button>
+                    <span id="ctn-page-label-bottom">—</span>
+                    <button type="button" class="m-btn m-btn-soft m-btn-round ctn-small-btn" data-ctn-action="next">Siguiente ›</button>
+                    <button type="button" class="m-btn m-btn-soft m-btn-round ctn-small-btn" data-ctn-action="last">Última »</button>
+                </div></div>
+            </section>
+        </div>
+        <div id="ctn-modal" class="ctn-modal" hidden></div>
+    </div>
+</template>
+
 <!-- ============================ SCRIPTS ============================ -->
 
 <!-- ============================
@@ -1369,6 +1449,8 @@
 ============================ -->
 
 <!-- 1) Librerías base -->
+<script src="js/supabase-client.js?v=1"></script>
+<script src="js/ctn.js?v=1"></script>
 <script src="js/reglas.js?v=2"></script>
 <script src="js/storage.js?v=2"></script>
 <script src="js/kpis.js?v=2"></script>
