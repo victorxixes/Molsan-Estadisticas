@@ -93,6 +93,16 @@ Estas funciones constituyen el inventario funcional de partida. No se propone el
 - `reglas.js` convierte fechas y seriales Excel con lógica propia; deben probarse seriales, fechas ambiguas, celdas vacías y valores de texto.
 - **Acción:** preservar valores originales, normalizar fechas a ISO y definir una clave de importación tras analizar el Excel real. No se debe asumir que el número de expediente es único.
 
+**G.1. El Dashboard y varios KPIs interpretan el mes con un tipo incorrecto**
+- `reglas.js` guarda `mes` como texto (`enero`, `febrero`, etc.).
+- `dashboard.js` convierte repetidamente `f.mes` con `Number()`; `kpis.js` hace lo mismo en `kpi_mesMasFuerte()` y `kpi_detalleMensual()`. Para nombres de mes, el resultado es `NaN`, por lo que los meses fuertes, comparativas mensuales y algunos filtros temporales no se calculan correctamente.
+- **Acción:** almacenar `mes_numero` como dimensión numérica derivada y `mes_nombre` como etiqueta; usar una función común de conversión y pruebas por cada mes.
+
+**G.2. Filtros auxiliares no respetan el contrato de datos**
+- `js/filtros.js` compara `fila.anio !== filtros.anio` sin normalizar tipos; los años del formulario suelen ser texto y los registros importados guardan el año como número.
+- El filtro de apoderado compara `fila.nombre` con el argumento, aunque el campo visible/origen de apoderado es `fila.apoderado`.
+- **Acción:** normalizar tipos y acordar los campos de búsqueda con el diccionario de datos; cubrir cada filtro con pruebas.
+
 ### Medios — módulos, integración y mantenimiento
 
 **I. Módulos duplicados o desconectados**
