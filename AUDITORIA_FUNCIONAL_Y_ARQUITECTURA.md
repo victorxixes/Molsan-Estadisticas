@@ -196,4 +196,5 @@ Una única identidad autorizada, con contraseña almacenada solo como hash robus
 - **Datos reales:** no se han descargado, alterado ni migrado datos.
 - **Render:** no se han modificado servicios, variables, dominios, despliegues ni bases de datos.
 - **Producción:** sin cambios.
-- **Siguiente hito:** completar pruebas controladas con una copia del Excel/backup y cerrar el diccionario de métricas antes de construir la nueva API y el esquema PostgreSQL.
+- **Trabajo añadido a la rama:** informe de auditoría, arquitectura técnica, diccionario preliminar, scaffold de API Node.js/TypeScript y primera migración SQL propuesta. El scaffold solo incluye health checks y conexión PostgreSQL; aún no tiene autenticación ni endpoints de negocio.
+- **Siguiente hito:** perfilar una copia del Excel/backup, cerrar las reglas y métricas con datos reales, instalar dependencias y ejecutar typecheck/pruebas de API, y validar la migración en PostgreSQL aislado.
