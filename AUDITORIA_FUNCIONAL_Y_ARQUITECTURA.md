@@ -127,9 +127,6 @@ Estas funciones constituyen el inventario funcional de partida. No se propone el
 - El botón de exportación no tiene los IDs `btnExportarCSV`/`btnExportarJSON` que comprueba `permisos.js`; por tanto, el control visual de exportación tampoco está conectado con ese botón.
 - **Acción:** implementar exportación del conjunto filtrado en servidor, con columnas y codificación acordadas, y validar autorización en backend.
 
-**J.2. Importación muestra progreso solo si el contenedor está visible**
-- El importador actual actualiza la barra y el texto, pero no gestiona de forma uniforme el estado visible del contenedor de progreso. Debe comprobarse el flujo visual completo al reconstruir el módulo y mostrar progreso, resultado y error de forma accesible.
-
 **K. Errores de mantenimiento**
 - `main.js` abre `molsanDB` pero la función de reinicio intenta borrar `molsan_db`; no es la misma base.
 - `backup.html` invoca un nombre de función que no existe en la lógica actual.
