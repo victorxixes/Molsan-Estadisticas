@@ -65,6 +65,8 @@
         const auth = state.root.querySelector("#ctn-auth");
         const app = state.root.querySelector("#ctn-app");
         if (app) app.hidden = true;
+        const actions = state.root.querySelector("#ctn-header-actions");
+        if (actions) actions.hidden = true;
         auth.hidden = false;
         auth.innerHTML = '<div class="ctn-login-card">' +
             '<div class="ctn-mark">CTN</div><div><p class="ctn-eyebrow">MOLSAN · ESTADÍSTICAS</p>' +
@@ -95,6 +97,7 @@
     function renderApp() {
         state.root.querySelector("#ctn-auth").hidden = true;
         state.root.querySelector("#ctn-app").hidden = false;
+        state.root.querySelector("#ctn-header-actions").hidden = false;
         if (state.root.dataset.ctnBound === "1") return;
         state.root.dataset.ctnBound = "1";
 
@@ -112,6 +115,11 @@
                 if (!action) return;
                 const name = action.dataset.ctnAction;
                 if (name === "refresh") await loadPage(state.page);
+                else if (name === "clear-filters") {
+                    state.filters = {q:"",provincia:"",municipio:"",vc:""};
+                    state.root.querySelector("#ctn-filter-form").reset();
+                    await loadPage(1);
+                }
                 else if (name === "logout") { await db().auth.signOut(); renderLogin(); }
                 else if (name === "new") openEdit(null);
                 else if (name === "import-toggle") toggleImport();
@@ -199,6 +207,10 @@
         const to = Math.min(state.page*PAGE_SIZE,state.total);
         state.root.querySelector("#ctn-total").textContent = state.total.toLocaleString("es-ES");
         state.root.querySelector("#ctn-page-label").textContent = "Página " + state.page + " de " + pages;
+        const bottomRange = state.root.querySelector("#ctn-range-bottom");
+        const bottomPage = state.root.querySelector("#ctn-page-label-bottom");
+        if (bottomRange) bottomRange.textContent = "Mostrando " + from + "–" + to + " de " + state.total.toLocaleString("es-ES");
+        if (bottomPage) bottomPage.textContent = "Página " + state.page + " de " + pages;
         state.root.querySelector("#ctn-range").textContent = "Mostrando " + from + "–" + to + " de " + state.total.toLocaleString("es-ES");
         state.root.querySelector('[data-ctn-action="prev"]').disabled = state.page <= 1;
         state.root.querySelector('[data-ctn-action="first"]').disabled = state.page <= 1;
