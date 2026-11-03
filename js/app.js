@@ -46,7 +46,28 @@ async function importacion(h){
     try{
       let wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:"",raw:false});
       if(!rows.length)throw Error("El Excel no contiene filas.");
-      let {data:batch,error}=await sb.from("estadisticas_importaciones").insert({periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:rows.length,mapeo_columnas:{columnas:Object.keys(rows[0])}}).select("id").single();
+      const excelHeaders=Object.keys(rows[0]||{});
+      const requiredExcelColumns=[
+        {name:"Provisión",aliases:["Provisión","Provision","Expediente"]},
+        {name:"Oficina",aliases:["Oficina"]},
+        {name:"Fecha Alta",aliases:["Fecha Alta"]},
+        {name:"Contrato",aliases:["Contrato"]},
+        {name:"Tipo Provisión",aliases:["Tipo Provisión","Tipo Provision"]},
+        {name:"Notario",aliases:["Notario"]},
+        {name:"Provincia",aliases:["Provincia"]},
+        {name:"Municipio",aliases:["Municipio"]},
+        {name:"Comunidad",aliases:["Comunidad"]},
+        {name:"Protocolo",aliases:["Protocolo"]},
+        {name:"Fecha Protocolo",aliases:["Fecha Protocolo"]},
+        {name:"V.C.",aliases:["V.C.","VC"]},
+        {name:"Apoderado",aliases:["Apoderado"]},
+        {name:"Envio Notario",aliases:["Envio Notario","Envío Notario"]},
+        {name:"Días",aliases:["Días","Dias"]}
+      ];
+      const normalizedHeaders=excelHeaders.map(norm);
+      const missingHeaders=requiredExcelColumns.filter(col=>!col.aliases.some(alias=>normalizedHeaders.includes(norm(alias)))).map(col=>col.name);
+      if(missingHeaders.length)throw Error("El Excel no contiene todas las columnas obligatorias. Faltan: "+missingHeaders.join(", ")+". Debe incluir las 15 columnas del modelo mensual.");
+      let {data:batch,error}=await sb.from("estadisticas_importaciones").insert({periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:rows.length,mapeo_columnas:{columnas:excelHeaders,columnas_obligatorias:requiredExcelColumns.map(c=>c.name)}}).select("id").single();
       if(error)throw error;
       let stagedRows=rows.map((r,i)=>{let m=mapRow(r),errs=[];if(!m.expediente)errs.push("Falta Expediente");if(!m.oficina)errs.push("Falta Oficina");return{importacion_id:batch.id,numero_fila:i+2,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]}});
       for(let i=0;i<stagedRows.length;i+=200){let {error}=await sb.from("estadisticas_filas_importacion").insert(stagedRows.slice(i,i+200));if(error)throw error}
