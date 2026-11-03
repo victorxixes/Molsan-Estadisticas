@@ -66,7 +66,63 @@ async function importacion(h){
 }
 function norm(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"")}
 function mapRow(r){let get=(...names)=>{let k=Object.keys(r).find(k=>names.some(n=>norm(k)===norm(n)));return k?r[k]:null};return{expediente:get("Expediente","Provisión"),oficina:get("Oficina"),fecha_alta:get("Fecha Alta"),contrato:get("Contrato"),tipo_provision:get("Tipo Provisión"),notario:get("Notario"),provincia:get("Provincia"),municipio:get("Municipio"),comunidad:get("Comunidad"),protocolo:get("Protocolo"),fecha_protocolo:get("Fecha Protocolo"),vc:get("V.C."),apoderado:get("Apoderado"),envio_notario:get("Envio Notario","Envío Notario"),dias_excel:get("Días")}}
-async function catalogosView(h){let c=catalogs.find(x=>x[0]===catalog)||catalogs[0],{data,error}=await sb.from(c[0]).select("*").order("orden").order("nombre");if(error)throw error;h.innerHTML=head("Catálogos","Administra los valores que utilizan los informes y las reglas calculadas.")+`<div class="catalog-layout"><section class="card"><div class="card-title"><h3>Catálogos</h3></div><div class="catalog-list">${catalogs.map(x=>`<button class="catalog-choice ${x[0]===c[0]?"active":""}" data-cat="${x[0]}">${x[1]}</button>`).join("")}</div></section><section class="card"><div class="card-title"><div><h3>${c[1]}</h3><p>${data.length} valores configurados</p></div><button class="btn primary small" id="add-cat">＋ Añadir valor</button></div><div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>ALIAS EXCEL</th><th>ESTADO</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo||"—")}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc((x.alias_excel||[]).join(", ")||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td></tr>`).join(""):'<tr><td colspan="4" class="empty-row">Catálogo vacío. Añade los valores confirmados en el Excel.</td></tr>'}</tbody></table></div></section></div>`;$('[data-cat]')&&$$('[data-cat]').forEach(b=>b.onclick=()=>{catalog=b.dataset.cat;render()});$("#add-cat").onclick=async()=>{let nombre=prompt("Nombre del valor:");if(!nombre?.trim())return;let codigo=prompt("Código (opcional):")||null,aliases=prompt("Alias Excel separados por coma (opcional):")||"";let {error}=await sb.from(c[0]).insert({nombre:nombre.trim(),codigo:codigo?.trim()||null,alias_excel:aliases.split(",").map(x=>x.trim()).filter(Boolean)});if(error)msg(error.message);else{msg("Valor añadido");render()}}}
+const catalogUsage={estadisticas_apoderados:["apoderado_id"],estadisticas_centros:["centro_id"],estadisticas_circuitos:["circuito_id"],estadisticas_tipos_firma:["tipo_firma_id"],estadisticas_oficinas:["oficina_id","oficina_origen_id"],estadisticas_tipos_entidad:["tipo_entidad_id"],estadisticas_tipos_gestion:["tipo_gestion_id"]};
+function closeCatalogModal(){const m=$("#catalog-modal");if(m)m.remove()}
+function catalogModal(row=null){
+  closeCatalogModal();
+  const editing=!!row;
+  const modal=document.createElement("div");modal.id="catalog-modal";modal.className="modal-backdrop";
+  modal.innerHTML=`<section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="catalog-modal-title">
+    <div class="modal-head"><div><span class="eyebrow">ADMINISTRACIÓN DE CATÁLOGOS</span><h2 id="catalog-modal-title">${editing?"Editar valor":"Nuevo valor"}</h2><p>Completa los datos y guarda los cambios.</p></div><button type="button" class="modal-close" id="catalog-modal-close" aria-label="Cerrar">×</button></div>
+    <form id="catalog-form"><div class="field-grid">
+      <div class="field"><label for="cat-name">Nombre *</label><input id="cat-name" required maxlength="180" value="${esc(row?.nombre||"")}" placeholder="Nombre del elemento"></div>
+      <div class="field"><label for="cat-code">Código</label><input id="cat-code" maxlength="100" value="${esc(row?.codigo||"")}" placeholder="Código opcional"></div>
+      <div class="field full-span"><label for="cat-alias">Alias de Excel</label><input id="cat-alias" value="${esc((row?.alias_excel||[]).join(", "))}" placeholder="Separados por comas"></div>
+      <div class="field"><label for="cat-order">Orden</label><input id="cat-order" type="number" step="1" value="${Number(row?.orden||0)}"></div>
+      <div class="field"><label for="cat-active">Estado</label><select id="cat-active"><option value="true" ${row?.activo!==false?"selected":""}>Activo</option><option value="false" ${row?.activo===false?"selected":""}>Inactivo</option></select></div>
+    </div><div class="modal-actions"><button type="button" class="btn secondary" id="catalog-cancel">Cancelar</button><button type="submit" class="btn primary" id="catalog-save">${editing?"Guardar cambios":"Crear valor"}</button></div></form>
+  </section>`;
+  document.body.append(modal);
+  $("#catalog-modal-close").onclick=closeCatalogModal;$("#catalog-cancel").onclick=closeCatalogModal;
+  modal.addEventListener("click",e=>{if(e.target===modal)closeCatalogModal()});
+  $("#catalog-form").onsubmit=async e=>{
+    e.preventDefault();const save=$("#catalog-save");save.disabled=true;save.textContent="Guardando…";
+    const payload={nombre:$("#cat-name").value.trim(),codigo:$("#cat-code").value.trim()||null,alias_excel:$("#cat-alias").value.split(",").map(x=>x.trim()).filter(Boolean),orden:Number($("#cat-order").value)||0,activo:$("#cat-active").value==="true",actualizado_en:new Date().toISOString()};
+    try{
+      let result=editing?await sb.from(catalog).update(payload).eq("id",row.id):await sb.from(catalog).insert(payload);
+      if(result.error)throw result.error;
+      closeCatalogModal();msg(editing?"Cambios guardados":"Valor creado");await catalogosView($("#view-container"));
+    }catch(err){msg("No se pudo guardar: "+err.message);save.disabled=false;save.textContent=editing?"Guardar cambios":"Crear valor"}
+  };
+  $("#cat-name").focus();
+}
+async function deleteCatalogValue(row){
+  const usageColumns=catalogUsage[catalog]||[];
+  let used=0;
+  for(const column of usageColumns){const {count,error}=await sb.from("estadisticas_registros").select("id",{count:"exact",head:true}).eq(column,row.id);if(error)throw error;used+=count||0}
+  if(used>0){
+    if(!confirm("Este valor está utilizado en "+used+" referencia(s). Se desactivará para conservar el histórico. ¿Continuar?"))return;
+    const {error}=await sb.from(catalog).update({activo:false,actualizado_en:new Date().toISOString()}).eq("id",row.id);if(error)throw error;
+    msg("Valor desactivado; se conserva el histórico");
+  }else{
+    if(!confirm("Este valor no está vinculado a expedientes. ¿Eliminarlo definitivamente?"))return;
+    const {error}=await sb.from(catalog).delete().eq("id",row.id);if(error)throw error;
+    msg("Valor eliminado");
+  }
+  await catalogosView($("#view-container"));
+}
+async function catalogosView(h){
+  let c=catalogs.find(x=>x[0]===catalog)||catalogs[0];catalog=c[0];
+  const {data,error}=await sb.from(c[0]).select("*").order("orden").order("nombre");if(error)throw error;
+  h.innerHTML=head("Catálogos","Administra los valores utilizados por los expedientes, informes y reglas.")
+  +`<div class="catalog-layout"><section class="card"><div class="card-title"><h3>Catálogos disponibles</h3></div><div class="catalog-list">${catalogs.map(x=>`<button class="catalog-choice ${x[0]===c[0]?"active":""}" data-cat="${x[0]}">${x[1]}</button>`).join("")}</div></section>
+  <section class="card"><div class="card-title"><div><h3>${c[1]}</h3><p>${data.length} valores · ${data.filter(x=>x.activo).length} activos</p></div><button class="btn primary small" id="add-cat">＋ Nuevo valor</button></div>
+  <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>ALIAS EXCEL</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo||"—")}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc((x.alias_excel||[]).join(", ")||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-edit="${x.id}">Editar</button><button class="btn danger small" data-delete="${x.id}">Eliminar</button></div></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">Este catálogo todavía está vacío. Puedes crear el primer valor.</td></tr>'}</tbody></table></div></section></div>`;
+  $$("[data-cat]").forEach(b=>b.onclick=()=>{catalog=b.dataset.cat;catalogosView($("#view-container"))});
+  $("#add-cat").onclick=()=>catalogModal();
+  $$("[data-edit]").forEach(b=>b.onclick=()=>catalogModal(data.find(x=>x.id===b.dataset.edit)));
+  $$("[data-delete]").forEach(b=>b.onclick=async()=>{try{await deleteCatalogValue(data.find(x=>x.id===b.dataset.delete))}catch(err){msg("No se pudo eliminar: "+err.message)}});
+}
 async function campos(h){let {data,error}=await sb.from("estadisticas_campos_calculados").select("*").order("orden");if(error)throw error;h.innerHTML=head("Campos calculados","Define métricas adicionales desde administración, sin programar cada campo.")+`<div class="notice">Las definiciones y versiones se conservan en PostgreSQL. El evaluador de reglas se activará cuando validemos las primeras reglas reales del Excel.</div><section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div><div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>DESCRIPCIÓN</th><th>ESTADO</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">No hay campos personalizados. Crea el primero cuando su regla esté definida.</td></tr>'}</tbody></table></div></section>` ;$("#new-field").onclick=async()=>{let nombre=prompt("Nombre visible:");if(!nombre?.trim())return;let codigo=prompt("Código técnico:",norm(nombre).replace(/[^a-z0-9]+/g,"_"));if(!codigo?.trim())return;let tipo=prompt("Tipo: texto, numero, decimal, fecha, booleano o json","numero")||"numero";let {error}=await sb.from("estadisticas_campos_calculados").insert({codigo:codigo.trim(),nombre:nombre.trim(),tipo_dato:tipo});if(error)msg(error.message);else{msg("Campo creado");render()}}}
 function informes(h){h.innerHTML=head(titles[view],view==="evolucion"?"Consulta la evolución mensual, anual y comparativa.":"Los informes se alimentarán del histórico validado.")+`<div class="grid quick-grid">${quick("▥","Actividad por oficina","Volumen y distribución","expedientes")}${quick("⌁","Tiempos de firma","Días entre hitos","expedientes")}${quick("▧","Centro y circuito","Distribución de actividad","catalogos")}</div><section class="card" style="margin-top:17px"><div class="empty-chart"><div><strong>Informes preparados</strong>Se activarán con el primer periodo validado.</div></div></section>`;wire()}
 function ajustes(h){h.innerHTML=head("Configuración","Preferencias generales y seguridad del espacio de trabajo.")+`<div class="grid content-grid"><section class="card"><div class="card-title"><h3>Acceso y seguridad</h3><span class="pill green">Activo</span></div><div class="status-line"><span>Usuario autorizado</span><b>${OWNER}</b></div><div class="status-line"><span>Proveedor de identidad</span><b>Supabase Auth OTP</b></div><div class="status-line"><span>Persistencia de datos</span><b>Supabase PostgreSQL</b></div><div class="status-line"><span>Almacenamiento de negocio local</span><b class="ok">Desactivado</b></div></section><section class="card"><div class="card-title"><h3>Plataforma</h3></div><div class="status-line"><span>Región</span><b>EU · Irlanda</b></div><div class="status-line"><span>Zona horaria</span><b>Europe/Madrid</b></div><div class="status-line"><span>Histórico mensual</span><b>Preparado</b></div></section></div>`}
