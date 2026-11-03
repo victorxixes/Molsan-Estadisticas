@@ -61,6 +61,7 @@ async function cargarModulo(nombre) {
             /* CORE */
             "dashboard-premium": "Dashboard Premium",
             "listado":            "Listado de Firmas",
+            "ctn":                "Catálogo notarial CTN",
             "uploader":           "Importación de Excel",
             "permisos":           "Permisos del Sistema",
             "backup":             "Backup de Datos",
@@ -102,6 +103,10 @@ case "dashboard": {
 }
             case "listado":
                 await initListado();
+                break;
+
+            case "ctn":
+                await initCtnModule();
                 break;
 
             case "acta-reunion":
