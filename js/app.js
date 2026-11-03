@@ -208,7 +208,7 @@ async function campoCalculadoModal(field=null){
     const {data,error}=await sb.from("estadisticas_reglas_calculo").select("*").eq("campo_id",field.id).order("version",{ascending:false}).limit(1);
     if(error)throw error;activeRule=data?.[0]||null;nextVersion=(activeRule?.version||0)+1;
   }
-  const definition=activeRule?.definicion?JSON.stringify(activeRule.definicion,null,2):'{\n  "operacion": "pendiente",\n  "campos": []\n}';
+  const definition=activeRule?.definicion?JSON.stringify(activeRule.definicion,null,2):"";
   const modal=document.createElement("div");modal.id="field-modal";modal.className="modal-backdrop";
   modal.innerHTML=`<section class="modal-card field-modal-card" role="dialog" aria-modal="true" aria-labelledby="field-modal-title">
     <div class="modal-head"><div><span class="eyebrow">DICCIONARIO DE MÉTRICAS</span><h2 id="field-modal-title">${editing?"Editar campo calculado":"Crear campo calculado"}</h2><p>Define la métrica y documenta su regla de cálculo.</p></div><button type="button" class="modal-close" id="field-modal-close" aria-label="Cerrar">×</button></div>
@@ -220,7 +220,7 @@ async function campoCalculadoModal(field=null){
       <div class="field full-span"><label for="field-description">Descripción</label><textarea id="field-description" maxlength="1000" placeholder="Qué mide este campo y para qué se utilizará">${esc(field?.descripcion||"")}</textarea></div>
       <div class="field"><label for="field-active">Estado del campo</label><select id="field-active"><option value="true" ${field?.activo!==false?"selected":""}>Activo</option><option value="false" ${field?.activo===false?"selected":""}>Inactivo</option></select></div>
       <div class="field"><label>Versión de regla</label><input value="${activeRule?"v"+activeRule.version+" · nueva versión v"+nextVersion:"Primera versión"}" disabled></div>
-      <div class="field full-span"><label for="field-rule">Definición de regla (JSON)</label><textarea id="field-rule" class="rule-editor" spellcheck="false">${esc(definition)}</textarea><small class="field-help">La definición se guarda versionada. El motor de evaluación todavía no ejecuta reglas automáticamente; esta configuración documenta la lógica hasta validar y activar su evaluador.</small></div>
+      <div class="field full-span"><label for="field-rule">Definición de regla (JSON)</label><textarea id="field-rule" class="rule-editor" spellcheck="false" placeholder="{&quot;operacion&quot;:&quot;...&quot;,&quot;campos&quot;:[]}">${esc(definition)}</textarea><small class="field-help">La definición se guarda versionada. El motor de evaluación todavía no ejecuta reglas automáticamente; esta configuración documenta la lógica hasta validar y activar su evaluador.</small></div>
       <div class="field full-span"><label for="field-rule-notes">Notas de la regla</label><textarea id="field-rule-notes" maxlength="2000" placeholder="Origen de los datos, condiciones, excepciones y criterios de validación…">${esc(activeRule?.notas||"")}</textarea></div>
     </div><div class="modal-actions"><button type="button" class="btn secondary" id="field-modal-cancel">Cancelar</button><button type="submit" class="btn primary" id="field-modal-save">${editing?"Guardar cambios":"Crear campo"}</button></div></form>
   </section>`;
@@ -236,7 +236,7 @@ async function campoCalculadoModal(field=null){
       if(editing){const {error}=await sb.from("estadisticas_campos_calculados").update(payload).eq("id",fieldId);if(error)throw error}
       else{const {data,error}=await sb.from("estadisticas_campos_calculados").insert(payload).select("id").single();if(error)throw error;fieldId=data.id}
       if(definitionValue!==null){
-        const {data:rules,error:rulesError}=await sb.from("estadisticas_reglas_calculo").select("id,version,activa").eq("campo_id",fieldId).order("version",{ascending:false});
+        const {data:rules,error:rulesError}=await sb.from("estadisticas_reglas_calculo").select("id,version,activa,definicion,notas").eq("campo_id",fieldId).order("version",{ascending:false});
         if(rulesError)throw rulesError;
         const current=rules?.[0]||null;
         if(!current||JSON.stringify(current.definicion)!==JSON.stringify(definitionValue)||current.notas!==($("#field-rule-notes").value.trim()||null)){
