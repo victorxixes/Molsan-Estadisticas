@@ -139,8 +139,7 @@ CREATE TABLE IF NOT EXISTS signature (
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT signature_month_ck CHECK (mes_numero IS NULL OR mes_numero BETWEEN 1 AND 12),
-  CONSTRAINT signature_days_ck CHECK (dias IS NULL OR dias >= 0)
+  CONSTRAINT signature_month_ck CHECK (mes_numero IS NULL OR mes_numero BETWEEN 1 AND 12)
 );
 CREATE INDEX IF NOT EXISTS signature_year_month_idx ON signature(anio, mes_numero);
 CREATE INDEX IF NOT EXISTS signature_expediente_idx ON signature(expediente);
