@@ -17,3 +17,15 @@ __pycache__/
 
 # Windows
 desktop.ini
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# API build output
+backend/dist/
+backend/node_modules/
