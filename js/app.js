@@ -488,8 +488,8 @@ async function reglas(h){
     }).join(""):'<div class="empty-row">Todavía no hay campos calculados.</div>')
     +'</section><div id="rule-preview-output"></div>';
   wire();
-  $("[data-rule-edit]").forEach(b=>b.onclick=()=>reglaModal(activeFields.find(f=>f.id===b.dataset.ruleEdit),byField.get(b.dataset.ruleEdit)?.find(x=>x.activa)||byField.get(b.dataset.ruleEdit)?.[0]||null));
-  $("[data-rule-preview]").forEach(b=>b.onclick=async()=>{
+  $$("[data-rule-edit]").forEach(b=>b.onclick=()=>reglaModal(activeFields.find(f=>f.id===b.dataset.ruleEdit),byField.get(b.dataset.ruleEdit)?.find(x=>x.activa)||byField.get(b.dataset.ruleEdit)?.[0]||null));
+  $$("[data-rule-preview]").forEach(b=>b.onclick=async()=>{
     const field=activeFields.find(f=>f.id===b.dataset.rulePreview),rule=byField.get(field.id)?.find(x=>x.activa)||byField.get(field.id)?.[0];
     if(!rule)return;
     await previewRule(field,rule.definicion,$("#rule-preview-output"));
@@ -502,7 +502,7 @@ function ruleConditionRow(condition,index){
   return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna de origen</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado si coincide</label><input data-rule-result value="'+esc(condition.resultado||"")+'" placeholder="Resultado"></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
 }
 function collectRuleDefinition(){
-  const conditions=$(".rule-condition").map(row=>{
+  const conditions=$$(".rule-condition").map(row=>{
     const op=row.querySelector("[data-rule-operator]").value;
     const raw=row.querySelector("[data-rule-values]").value.trim();
     const values=op==="empty"||op==="not_empty"?[]:(op==="in"?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
@@ -521,8 +521,8 @@ async function reglaModal(field,currentRule=null){
   document.body.append(modal);
   const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const bindRows=()=>{
-    $("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
-    $("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty"].includes(s.value)});
+    $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
+    $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty"].includes(s.value)});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
     const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
