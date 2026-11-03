@@ -29,7 +29,7 @@ async function expedientes(h){
   h.innerHTML=head("Expedientes","Consulta los 15 campos del Excel mensual en cada registro.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
     +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en cualquiera de las 15 columnas…"><span class="pill">'+(data?.length||0)+' registros recientes · 15 columnas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="15" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
-  $("#search-exp").oninput=e=>$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
+  $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
 }
 async function notarios(h){
   const size=50,from=notaryPage*size,to=from+size-1;
@@ -47,7 +47,7 @@ async function notarios(h){
   $("#notary-search").onkeydown=e=>{if(e.key==="Enter")$("#notary-search-btn").click()};
   $("#notary-prev").onclick=()=>{notaryPage=Math.max(0,notaryPage-1);notarios($("#view-container"))};
   $("#notary-next").onclick=()=>{notaryPage++;notarios($("#view-container"))};
-  $("[data-notary-detail]").forEach(b=>b.onclick=()=>notarioFicha(Number(b.dataset.notaryDetail)));
+  $$("[data-notary-detail]").forEach(b=>b.onclick=()=>notarioFicha(Number(b.dataset.notaryDetail)));
 }
 async function notarioFicha(id){
   const {data:n,error}=await sb.from("ctn_notarios").select("*").eq("id",id).single();if(error)throw error;
