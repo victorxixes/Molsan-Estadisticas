@@ -4,3 +4,5 @@
 @media(max-width:720px){.modal-backdrop{padding:12px}.modal-card{padding:19px}.modal-card .field-grid{grid-template-columns:1fr}.modal-card .field.full-span{grid-column:auto}.row-actions{flex-wrap:wrap}}
 
 .catalog-subtitle{font-size:9px;font-weight:800;letter-spacing:1.15px;color:#8298a8;margin:20px 0 8px;padding:0 10px}.catalog-footnote{margin:18px 2px 0;line-height:1.6}.catalog-layout .btn.full{width:100%;justify-content:center;margin-top:12px}.catalog-layout .card-title .row-actions{flex-wrap:wrap;justify-content:flex-end}@media(max-width:720px){.catalog-layout .card-title{align-items:flex-start;gap:12px;flex-direction:column}.catalog-layout .card-title .row-actions{justify-content:flex-start}}
+
+.field-modal-card{width:min(760px,100%);max-height:calc(100vh - 40px);overflow:auto}.field-modal-card .rule-editor{min-height:150px;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;tab-size:2}.field-help{display:block;margin-top:8px;color:var(--muted);font-size:10px;line-height:1.55}.field-modal-card .field textarea{min-height:76px}
