@@ -187,7 +187,20 @@ Se aplicarán los colores corporativos aprobados:
 
 Componentes previstos: navegación lateral, cabeceras de página, tarjetas KPI, filtros, tablas con estado vacío y paginación, gráficos, modales, notificaciones, formularios y editor documental. Iconos SVG consistentes, estados accesibles, foco de teclado, contraste y responsive. Se evitarán emojis como iconos funcionales y las capas Glass serán sutiles.
 
-## 8. Criterios de aceptación antes de producción
+
+## 9. Scaffold técnico creado en la rama
+
+Se ha añadido un primer esqueleto no desplegado:
+- `backend/package.json` y `backend/tsconfig.json` con Fastify, TypeScript, PostgreSQL y Zod.
+- `backend/src/config/env.ts` valida variables obligatorias al arrancar.
+- `backend/src/db/pool.ts` centraliza el pool PostgreSQL y comprobaciones de disponibilidad.
+- `backend/src/app.ts` registra Helmet, CORS de origen único, rate limit y rutas `/health/live` y `/health/ready`.
+- `backend/src/server.ts` inicia el servicio y gestiona apagado ordenado.
+- `database/migrations/001_initial_schema.sql` propone tablas de cuenta/sesión, reglas, staging, firmas, snapshots, actas, tareas, backups y auditoría.
+
+**Límite deliberado:** el scaffold todavía no implementa login, cookies de sesión, CSRF, subida de Excel, endpoints de negocio ni un ejecutor de migraciones. No se debe desplegar ni conectar a datos reales hasta añadir esas capas y pasar las pruebas. El SQL no se ha ejecutado en ninguna base de datos.
+
+## 10. Criterios de aceptación antes de producción
 
 - El total de registros importados coincide con el total validado y las diferencias están explicadas.
 - Reconciliación por año/mes y por dimensiones de negocio aprobada.
