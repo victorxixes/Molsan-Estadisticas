@@ -165,10 +165,13 @@
                 "id,codigo,nombre,apellidos,nif,telefono,provincia,municipio,cp,direccion,vc,apoderado,apoderado_s,departamento_cancelaciones,departamento_copias,otros_departamentos,observacion",
                 {count:"exact"}
             );
-            const q = state.filters.q.replace(/[,%()\\]/g," ").replace(/[%_]/g,"").trim();
+            const safeTerm = value => clean(value).replace(/[,%()\\'""]/g," ").replace(/[%_]/g,"").trim();
+            const q = safeTerm(state.filters.q);
+            const provincia = safeTerm(state.filters.provincia);
+            const municipio = safeTerm(state.filters.municipio);
             if (q) query = query.or("codigo.ilike.%" + q + "%,nombre.ilike.%" + q + "%,apellidos.ilike.%" + q + "%,nif.ilike.%" + q + "%");
-            if (state.filters.provincia) query = query.ilike("provincia","%" + state.filters.provincia + "%");
-            if (state.filters.municipio) query = query.ilike("municipio","%" + state.filters.municipio + "%");
+            if (provincia) query = query.ilike("provincia","%" + provincia + "%");
+            if (municipio) query = query.ilike("municipio","%" + municipio + "%");
             if (state.filters.vc === "si") query = query.eq("vc","VideoConferencia");
             if (state.filters.vc === "no") query = query.eq("vc","Presencial");
             const from = (page-1)*PAGE_SIZE;
