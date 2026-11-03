@@ -350,7 +350,7 @@ async function catalogosView(h){
   $$("[data-base-cat-edit]").forEach(b=>b.onclick=()=>baseCatalogModal(activeConfigs.find(x=>x.id===b.dataset.baseCatEdit)));
   $$("[data-base-cat-delete]").forEach(b=>b.onclick=async()=>{const row=activeConfigs.find(x=>x.id===b.dataset.baseCatDelete);if(!row)return;if(!confirm("Se ocultará el catálogo \""+row.nombre+"\" de la lista. Sus valores y referencias históricas se conservarán. ¿Continuar?"))return;try{const {error}=await sb.from("estadisticas_catalogos_configuracion").update({activo:false,actualizado_en:new Date().toISOString()}).eq("id",row.id);if(error)throw error;if(catalog===row.clave)catalog=(activeConfigs.find(x=>x.activo&&x.id!==row.id)?.clave)||"estadisticas_apoderados";msg("Catálogo ocultado; se conserva el histórico");await catalogosView($("#view-container"))}catch(err){msg("No se pudo ocultar: "+err.message)}});
 
-  $$$("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
+  $("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
   $("#add-custom-catalog").onclick=()=>customCatalogModal();$("#add-custom-catalog-side").onclick=()=>customCatalogModal();
   $("#add-cat").onclick=()=>catalogModal();
   $$("[data-edit]").forEach(b=>b.onclick=()=>catalogModal(data.find(x=>x.id===b.dataset.edit)));
