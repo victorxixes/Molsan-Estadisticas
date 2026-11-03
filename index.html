@@ -20,13 +20,7 @@
       <form id="login-form">
         <label for="login-email">Correo autorizado</label>
         <input id="login-email" type="email" autocomplete="email" value="victor.tomas.c@gmail.com" required>
-        <button class="btn primary full" type="submit">Enviar código de acceso <span>→</span></button>
-      </form>
-      <form id="otp-form" class="hidden">
-        <label for="login-otp">Código recibido por correo</label>
-        <input id="login-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Introduce el código" required>
-        <button class="btn primary full" type="submit">Verificar y entrar <span>→</span></button>
-        <button class="text-button" id="back-login" type="button">Cambiar correo</button>
+        <button class="btn primary full" type="submit">Enviar enlace de acceso <span>→</span></button>
       </form>
       <div id="auth-message" class="auth-message" aria-live="polite"></div>
       <div class="auth-foot"><span class="lock-dot"></span> Conexión privada y datos centralizados en Supabase</div>
