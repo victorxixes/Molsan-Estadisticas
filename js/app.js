@@ -200,7 +200,71 @@ async function catalogosView(h){
   $$("[data-edit]").forEach(b=>b.onclick=()=>catalogModal(data.find(x=>x.id===b.dataset.edit)));
   $$("[data-delete]").forEach(b=>b.onclick=async()=>{try{await deleteCatalogValue(data.find(x=>x.id===b.dataset.delete))}catch(err){msg("No se pudo eliminar: "+err.message)}});
 }
-async function campos(h){let {data,error}=await sb.from("estadisticas_campos_calculados").select("*").order("orden");if(error)throw error;h.innerHTML=head("Campos calculados","Define métricas adicionales desde administración, sin programar cada campo.")+`<div class="notice">Las definiciones y versiones se conservan en PostgreSQL. El evaluador de reglas se activará cuando validemos las primeras reglas reales del Excel.</div><section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div><div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>DESCRIPCIÓN</th><th>ESTADO</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">No hay campos personalizados. Crea el primero cuando su regla esté definida.</td></tr>'}</tbody></table></div></section>` ;$("#new-field").onclick=async()=>{let nombre=prompt("Nombre visible:");if(!nombre?.trim())return;let codigo=prompt("Código técnico:",norm(nombre).replace(/[^a-z0-9]+/g,"_"));if(!codigo?.trim())return;let tipo=prompt("Tipo: texto, numero, decimal, fecha, booleano o json","numero")||"numero";let {error}=await sb.from("estadisticas_campos_calculados").insert({codigo:codigo.trim(),nombre:nombre.trim(),tipo_dato:tipo});if(error)msg(error.message);else{msg("Campo creado");render()}}}
+
+async function campoCalculadoModal(field=null){
+  const editing=!!field;
+  let activeRule=null, nextVersion=1;
+  if(editing){
+    const {data,error}=await sb.from("estadisticas_reglas_calculo").select("*").eq("campo_id",field.id).order("version",{ascending:false}).limit(1);
+    if(error)throw error;activeRule=data?.[0]||null;nextVersion=(activeRule?.version||0)+1;
+  }
+  const definition=activeRule?.definicion?JSON.stringify(activeRule.definicion,null,2):'{\n  "operacion": "pendiente",\n  "campos": []\n}';
+  const modal=document.createElement("div");modal.id="field-modal";modal.className="modal-backdrop";
+  modal.innerHTML=`<section class="modal-card field-modal-card" role="dialog" aria-modal="true" aria-labelledby="field-modal-title">
+    <div class="modal-head"><div><span class="eyebrow">DICCIONARIO DE MÉTRICAS</span><h2 id="field-modal-title">${editing?"Editar campo calculado":"Crear campo calculado"}</h2><p>Define la métrica y documenta su regla de cálculo.</p></div><button type="button" class="modal-close" id="field-modal-close" aria-label="Cerrar">×</button></div>
+    <form id="field-modal-form"><div class="field-grid">
+      <div class="field"><label for="field-name">Nombre visible *</label><input id="field-name" required maxlength="120" value="${esc(field?.nombre||"")}" placeholder="Ej. Días hasta protocolo"></div>
+      <div class="field"><label for="field-code">Código técnico *</label><input id="field-code" required maxlength="100" pattern="[a-z][a-z0-9_]*" value="${esc(field?.codigo||"")}" placeholder="dias_hasta_protocolo" ${editing?"readonly":""}></div>
+      <div class="field"><label for="field-type">Tipo de dato</label><select id="field-type">${["texto","numero","decimal","fecha","booleano","json"].map(x=>`<option value="${x}" ${(field?.tipo_dato||"numero")===x?"selected":""}>${x}</option>`).join("")}</select></div>
+      <div class="field"><label for="field-order">Orden de visualización</label><input id="field-order" type="number" value="${Number(field?.orden||0)}"></div>
+      <div class="field full-span"><label for="field-description">Descripción</label><textarea id="field-description" maxlength="1000" placeholder="Qué mide este campo y para qué se utilizará">${esc(field?.descripcion||"")}</textarea></div>
+      <div class="field"><label for="field-active">Estado del campo</label><select id="field-active"><option value="true" ${field?.activo!==false?"selected":""}>Activo</option><option value="false" ${field?.activo===false?"selected":""}>Inactivo</option></select></div>
+      <div class="field"><label>Versión de regla</label><input value="${activeRule?"v"+activeRule.version+" · nueva versión v"+nextVersion:"Primera versión"}" disabled></div>
+      <div class="field full-span"><label for="field-rule">Definición de regla (JSON)</label><textarea id="field-rule" class="rule-editor" spellcheck="false">${esc(definition)}</textarea><small class="field-help">La definición se guarda versionada. El motor de evaluación todavía no ejecuta reglas automáticamente; esta configuración documenta la lógica hasta validar y activar su evaluador.</small></div>
+      <div class="field full-span"><label for="field-rule-notes">Notas de la regla</label><textarea id="field-rule-notes" maxlength="2000" placeholder="Origen de los datos, condiciones, excepciones y criterios de validación…">${esc(activeRule?.notas||"")}</textarea></div>
+    </div><div class="modal-actions"><button type="button" class="btn secondary" id="field-modal-cancel">Cancelar</button><button type="submit" class="btn primary" id="field-modal-save">${editing?"Guardar cambios":"Crear campo"}</button></div></form>
+  </section>`;
+  document.body.append(modal);const close=()=>modal.remove();$("#field-modal-close").onclick=close;$("#field-modal-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  $("#field-name").addEventListener("input",()=>{if(!editing)$("#field-code").value=norm($("#field-name").value).replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"")});
+  $("#field-modal-form").onsubmit=async e=>{
+    e.preventDefault();const b=$("#field-modal-save");b.disabled=true;b.textContent="Guardando…";
+    let definitionValue=null,ruleText=$("#field-rule").value.trim();
+    if(ruleText){try{definitionValue=JSON.parse(ruleText)}catch(err){msg("La definición JSON no es válida: "+err.message);b.disabled=false;b.textContent=editing?"Guardar cambios":"Crear campo";return}}
+    const payload={nombre:$("#field-name").value.trim(),codigo:$("#field-code").value.trim(),tipo_dato:$("#field-type").value,descripcion:$("#field-description").value.trim()||null,orden:Number($("#field-order").value)||0,activo:$("#field-active").value==="true",actualizado_en:new Date().toISOString()};
+    try{
+      let fieldId=field?.id;
+      if(editing){const {error}=await sb.from("estadisticas_campos_calculados").update(payload).eq("id",fieldId);if(error)throw error}
+      else{const {data,error}=await sb.from("estadisticas_campos_calculados").insert(payload).select("id").single();if(error)throw error;fieldId=data.id}
+      if(definitionValue!==null){
+        const {data:rules,error:rulesError}=await sb.from("estadisticas_reglas_calculo").select("id,version,activa").eq("campo_id",fieldId).order("version",{ascending:false});
+        if(rulesError)throw rulesError;
+        const current=rules?.[0]||null;
+        if(!current||JSON.stringify(current.definicion)!==JSON.stringify(definitionValue)||current.notas!==($("#field-rule-notes").value.trim()||null)){
+          const version=(current?.version||0)+1;
+          const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:fieldId,version,definicion:definitionValue,activa:false,motor:"expresion_v1",notas:$("#field-rule-notes").value.trim()||null}).select("id").single();
+          if(insertError)throw insertError;
+          const {error:deactivateError}=await sb.from("estadisticas_reglas_calculo").update({activa:false,vigente_hasta:new Date().toISOString()}).eq("campo_id",fieldId).eq("activa",true);
+          if(deactivateError)throw deactivateError;
+          const {error:activateError}=await sb.from("estadisticas_reglas_calculo").update({activa:true}).eq("id",newRule.id);
+          if(activateError)throw activateError;
+        }
+      }
+      close();msg(editing?"Campo actualizado":"Campo creado");await campos($("#view-container"));
+    }catch(err){msg("No se pudo guardar: "+err.message);b.disabled=false;b.textContent=editing?"Guardar cambios":"Crear campo"}
+  };
+  $("#field-name").focus();
+}
+async function campos(h){
+  const {data,error}=await sb.from("estadisticas_campos_calculados").select("*").order("orden").order("nombre");if(error)throw error;
+  const {data:rules,error:rulesError}=await sb.from("estadisticas_reglas_calculo").select("campo_id,version,activa");if(rulesError)throw rulesError;
+  const ruleMap=new Map();(rules||[]).forEach(r=>{const old=ruleMap.get(r.campo_id)||{version:0,active:false};old.version=Math.max(old.version,r.version);old.active=old.active||r.activa;ruleMap.set(r.campo_id,old)});
+  h.innerHTML=head("Campos calculados","Define métricas adicionales, documenta sus reglas y conserva su histórico de versiones.")
+  +`<div class="notice">Las definiciones y versiones se guardan en PostgreSQL. La configuración de una regla no significa que ya se esté ejecutando: el evaluador automático se activará después de validar las fórmulas con datos reales.</div>
+  <section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos · ${data.filter(x=>x.activo).length} activos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div>
+  <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>REGLA</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>{const r=ruleMap.get(x.id);return `<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${r?"v"+r.version+(r.active?" · Activa":" · Inactiva"):"Sin regla"}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><button class="btn secondary small" data-edit-field="${x.id}">Editar</button></td></tr>`}).join(""):'<tr><td colspan="7" class="empty-row">Todavía no hay campos calculados. Crea el primero.</td></tr>'}</tbody></table></div></section>`;
+  $("#new-field").onclick=()=>campoCalculadoModal();
+  $$("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
+}
 function informes(h){h.innerHTML=head(titles[view],view==="evolucion"?"Consulta la evolución mensual, anual y comparativa.":"Los informes se alimentarán del histórico validado.")+`<div class="grid quick-grid">${quick("▥","Actividad por oficina","Volumen y distribución","expedientes")}${quick("⌁","Tiempos de firma","Días entre hitos","expedientes")}${quick("▧","Centro y circuito","Distribución de actividad","catalogos")}</div><section class="card" style="margin-top:17px"><div class="empty-chart"><div><strong>Informes preparados</strong>Se activarán con el primer periodo validado.</div></div></section>`;wire()}
 function ajustes(h){h.innerHTML=head("Configuración","Preferencias generales y seguridad del espacio de trabajo.")+`<div class="grid content-grid"><section class="card"><div class="card-title"><h3>Acceso y seguridad</h3><span class="pill green">Activo</span></div><div class="status-line"><span>Usuario autorizado</span><b>${OWNER}</b></div><div class="status-line"><span>Proveedor de identidad</span><b>Supabase Auth OTP</b></div><div class="status-line"><span>Persistencia de datos</span><b>Supabase PostgreSQL</b></div><div class="status-line"><span>Almacenamiento de negocio local</span><b class="ok">Desactivado</b></div></section><section class="card"><div class="card-title"><h3>Plataforma</h3></div><div class="status-line"><span>Región</span><b>EU · Irlanda</b></div><div class="status-line"><span>Zona horaria</span><b>Europe/Madrid</b></div><div class="status-line"><span>Histórico mensual</span><b>Preparado</b></div></section></div>`}
 async function boot(){let {data:{session}}=await sb.auth.getSession();if(session?.user?.email?.toLowerCase()===OWNER)showApp();else if(session){await sb.auth.signOut();$("#auth-screen").classList.remove("hidden")}}
