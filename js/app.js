@@ -3,7 +3,7 @@ const SUPABASE_URL="https://agiagymgogwikxfounqd.supabase.co", SUPABASE_KEY="sb_
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const catalogs=[["estadisticas_apoderados","Apoderados"],["estadisticas_centros","Centros"],["estadisticas_circuitos","Circuitos"],["estadisticas_tipos_firma","Tipos de firma"],["estadisticas_oficinas","Oficinas"],["estadisticas_tipos_entidad","Tipos de entidad"],["estadisticas_tipos_gestion","Tipos de gestión"]];
-const titles={dashboard:"Dashboard",expedientes:"Expedientes",importacion:"Importación mensual",informes:"Informes",evolucion:"Evolución",catalogos:"Catálogos",campos:"Campos calculados",ajustes:"Configuración"};let view="dashboard",catalog=catalogs[0][0];
+const titles={dashboard:"Dashboard",expedientes:"Expedientes",importacion:"Importación mensual",informes:"Informes",evolucion:"Evolución",catalogos:"Catálogos",campos:"Campos calculados",ajustes:"Configuración"};let view="dashboard",catalog=catalogs[0][0],customCatalogId=null;
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function msg(t){let e=$("#toast");e.textContent=t;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),3000)}
 function head(t,s,a=""){return `<div class="page-head"><div><h1>${t}</h1><p>${s}</p></div><div class="head-actions">${a}</div></div>`}
@@ -111,14 +111,91 @@ async function deleteCatalogValue(row){
   }
   await catalogosView($("#view-container"));
 }
+
+async function customCatalogModal(row=null){
+  const editing=!!row, modal=document.createElement("div");modal.id="catalog-modal";modal.className="modal-backdrop";
+  modal.innerHTML=`<section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-catalog-title">
+    <div class="modal-head"><div><span class="eyebrow">ADMINISTRACIÓN DE CATÁLOGOS</span><h2 id="custom-catalog-title">${editing?"Editar catálogo":"Crear nuevo catálogo"}</h2><p>Define una categoría que podrás mantener desde esta pantalla.</p></div><button type="button" class="modal-close" id="custom-cat-close" aria-label="Cerrar">×</button></div>
+    <form id="custom-cat-form"><div class="field-grid">
+      <div class="field full-span"><label for="custom-cat-name">Nombre del catálogo *</label><input id="custom-cat-name" required maxlength="100" value="${esc(row?.nombre||"")}" placeholder="Ej. Tipo de documento"></div>
+      <div class="field full-span"><label for="custom-cat-desc">Descripción</label><textarea id="custom-cat-desc" maxlength="500" placeholder="Para qué se utilizará este catálogo">${esc(row?.descripcion||"")}</textarea></div>
+      <div class="field"><label for="custom-cat-active">Estado</label><select id="custom-cat-active"><option value="true" ${row?.activo!==false?"selected":""}>Activo</option><option value="false" ${row?.activo===false?"selected":""}>Inactivo</option></select></div>
+    </div><div class="modal-actions"><button type="button" class="btn secondary" id="custom-cat-cancel">Cancelar</button><button type="submit" class="btn primary" id="custom-cat-save">${editing?"Guardar cambios":"Crear catálogo"}</button></div></form></section>`;
+  document.body.append(modal);
+  const close=()=>modal.remove();$("#custom-cat-close").onclick=close;$("#custom-cat-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  $("#custom-cat-form").onsubmit=async e=>{
+    e.preventDefault();const b=$("#custom-cat-save");b.disabled=true;b.textContent="Guardando…";
+    const nombre=$("#custom-cat-name").value.trim(),payload={nombre,descripcion:$("#custom-cat-desc").value.trim()||null,activo:$("#custom-cat-active").value==="true",actualizado_en:new Date().toISOString()};
+    if(!nombre){b.disabled=false;return}
+    try{
+      let result;
+      if(editing) result=await sb.from("estadisticas_catalogos_personalizados").update(payload).eq("id",row.id);
+      else {const clave=norm(nombre).replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,60);result=await sb.from("estadisticas_catalogos_personalizados").insert({...payload,clave:clave.length<2?"catalogo_"+Date.now():clave});}
+      if(result.error)throw result.error;
+      close();msg(editing?"Catálogo actualizado":"Catálogo creado");await catalogosView($("#view-container"));
+    }catch(err){msg("No se pudo guardar: "+err.message);b.disabled=false;b.textContent=editing?"Guardar cambios":"Crear catálogo"}
+  };
+  $("#custom-cat-name").focus();
+}
+async function customValueModal(row=null){
+  const editing=!!row,modal=document.createElement("div");modal.id="catalog-modal";modal.className="modal-backdrop";
+  modal.innerHTML=`<section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-value-title">
+    <div class="modal-head"><div><span class="eyebrow">CATÁLOGO PERSONALIZADO</span><h2 id="custom-value-title">${editing?"Editar valor":"Nuevo valor"}</h2><p>Añade un elemento a este catálogo.</p></div><button type="button" class="modal-close" id="custom-value-close" aria-label="Cerrar">×</button></div>
+    <form id="custom-value-form"><div class="field-grid">
+      <div class="field"><label for="custom-value-name">Nombre *</label><input id="custom-value-name" required maxlength="180" value="${esc(row?.nombre||"")}"></div>
+      <div class="field"><label for="custom-value-code">Código</label><input id="custom-value-code" maxlength="100" value="${esc(row?.codigo||"")}"></div>
+      <div class="field full-span"><label for="custom-value-alias">Alias de Excel</label><input id="custom-value-alias" value="${esc((row?.alias_excel||[]).join(", "))}" placeholder="Separados por comas"></div>
+      <div class="field"><label for="custom-value-order">Orden</label><input id="custom-value-order" type="number" value="${Number(row?.orden||0)}"></div>
+      <div class="field"><label for="custom-value-active">Estado</label><select id="custom-value-active"><option value="true" ${row?.activo!==false?"selected":""}>Activo</option><option value="false" ${row?.activo===false?"selected":""}>Inactivo</option></select></div>
+    </div><div class="modal-actions"><button type="button" class="btn secondary" id="custom-value-cancel">Cancelar</button><button type="submit" class="btn primary" id="custom-value-save">${editing?"Guardar cambios":"Crear valor"}</button></div></form></section>`;
+  document.body.append(modal);const close=()=>modal.remove();$("#custom-value-close").onclick=close;$("#custom-value-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  $("#custom-value-form").onsubmit=async e=>{
+    e.preventDefault();const b=$("#custom-value-save");b.disabled=true;b.textContent="Guardando…";
+    const payload={catalogo_id:customCatalogId,nombre:$("#custom-value-name").value.trim(),codigo:$("#custom-value-code").value.trim()||null,alias_excel:$("#custom-value-alias").value.split(",").map(x=>x.trim()).filter(Boolean),orden:Number($("#custom-value-order").value)||0,activo:$("#custom-value-active").value==="true",actualizado_en:new Date().toISOString()};
+    try{let result=editing?await sb.from("estadisticas_valores_catalogos_personalizados").update(payload).eq("id",row.id):await sb.from("estadisticas_valores_catalogos_personalizados").insert(payload);if(result.error)throw result.error;close();msg(editing?"Valor actualizado":"Valor creado");await catalogosView($("#view-container"))}
+    catch(err){msg("No se pudo guardar: "+err.message);b.disabled=false;b.textContent=editing?"Guardar cambios":"Crear valor"}
+  };
+  $("#custom-value-name").focus();
+}
+async function deleteCustomCatalogValue(row){
+  if(!confirm("¿Eliminar definitivamente el valor «"+row.nombre+"»?"))return;
+  const {error}=await sb.from("estadisticas_valores_catalogos_personalizados").delete().eq("id",row.id);if(error)throw error;
+  msg("Valor eliminado");await catalogosView($("#view-container"));
+}
+async function deleteCustomCatalog(row){
+  const {count,error}=await sb.from("estadisticas_valores_catalogos_personalizados").select("id",{count:"exact",head:true}).eq("catalogo_id",row.id);
+  if(error)throw error;
+  if(count){if(!confirm("Este catálogo contiene "+count+" valores. Se desactivará para conservarlos. ¿Continuar?"))return;const {error:e}=await sb.from("estadisticas_catalogos_personalizados").update({activo:false,actualizado_en:new Date().toISOString()}).eq("id",row.id);if(e)throw e;msg("Catálogo desactivado; se conservan sus valores")}
+  else{if(!confirm("Este catálogo está vacío. ¿Eliminarlo definitivamente?"))return;const {error:e}=await sb.from("estadisticas_catalogos_personalizados").delete().eq("id",row.id);if(e)throw e;msg("Catálogo eliminado")}
+  if(customCatalogId===row.id)customCatalogId=null;await catalogosView($("#view-container"));
+}
 async function catalogosView(h){
+  const {data:customs,error:customError}=await sb.from("estadisticas_catalogos_personalizados").select("*").order("orden").order("nombre");if(customError)throw customError;
+  const selectedCustom=(customs||[]).find(x=>x.id===customCatalogId)||null;
+  if(selectedCustom){
+    const {data,error}=await sb.from("estadisticas_valores_catalogos_personalizados").select("*").eq("catalogo_id",selectedCustom.id).order("orden").order("nombre");if(error)throw error;
+    h.innerHTML=head("Catálogos","Crea y administra categorías y valores sin depender de cambios de programación.")
+    +`<div class="catalog-layout"><section class="card"><div class="card-title"><h3>Catálogos disponibles</h3></div><button class="catalog-choice" data-back-catalogs="1">← Catálogos estándar</button><div class="catalog-subtitle">CATÁLOGOS PERSONALIZADOS</div>${(customs||[]).map(x=>`<button class="catalog-choice ${x.id===selectedCustom.id?"active":""}" data-custom-cat="${x.id}">${esc(x.nombre)} ${x.activo?"":"· Inactivo"}</button>`).join("")}<button class="btn secondary small full" id="add-custom-catalog-side">＋ Nuevo catálogo</button></section>
+    <section class="card"><div class="card-title"><div><h3>${esc(selectedCustom.nombre)}</h3><p>${esc(selectedCustom.descripcion||"Catálogo personalizado")} · ${data.length} valores · ${data.filter(x=>x.activo).length} activos</p></div><div class="row-actions"><button class="btn secondary small" id="edit-custom-catalog">Editar catálogo</button><button class="btn danger small" id="delete-custom-catalog">Eliminar</button><button class="btn primary small" id="add-custom-value">＋ Nuevo valor</button></div></div>
+    <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>ALIAS EXCEL</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo||"—")}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc((x.alias_excel||[]).join(", ")||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-custom-edit="${x.id}">Editar</button><button class="btn danger small" data-custom-delete="${x.id}">Eliminar</button></div></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">Este catálogo está vacío. Crea el primer valor.</td></tr>'}</tbody></table></div>
+    <p class="muted small catalog-footnote">Las categorías personalizadas quedan guardadas en Supabase y preparadas para incorporarse a los campos de importación, expedientes e informes mediante su configuración de correspondencias.</p></section></div>`;
+    $$("[data-back-catalogs]").forEach(b=>b.onclick=()=>{customCatalogId=null;catalogosView($("#view-container"))});
+    $$("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
+    $("#add-custom-catalog-side").onclick=()=>customCatalogModal();$("#edit-custom-catalog").onclick=()=>customCatalogModal(selectedCustom);$("#delete-custom-catalog").onclick=async()=>{try{await deleteCustomCatalog(selectedCustom)}catch(e){msg(e.message)}};
+    $("#add-custom-value").onclick=()=>customValueModal();
+    $$("[data-custom-edit]").forEach(b=>b.onclick=()=>customValueModal(data.find(x=>x.id===b.dataset.customEdit)));
+    $$("[data-custom-delete]").forEach(b=>b.onclick=async()=>{try{await deleteCustomCatalogValue(data.find(x=>x.id===b.dataset.customDelete))}catch(e){msg(e.message)}});
+    return;
+  }
   let c=catalogs.find(x=>x[0]===catalog)||catalogs[0];catalog=c[0];
   const {data,error}=await sb.from(c[0]).select("*").order("orden").order("nombre");if(error)throw error;
-  h.innerHTML=head("Catálogos","Administra los valores utilizados por los expedientes, informes y reglas.")
-  +`<div class="catalog-layout"><section class="card"><div class="card-title"><h3>Catálogos disponibles</h3></div><div class="catalog-list">${catalogs.map(x=>`<button class="catalog-choice ${x[0]===c[0]?"active":""}" data-cat="${x[0]}">${x[1]}</button>`).join("")}</div></section>
+  h.innerHTML=head("Catálogos","Administra los siete catálogos base y crea nuevas categorías cuando las necesites.",'<button class="btn primary small" id="add-custom-catalog">＋ Crear catálogo</button>')
+  +`<div class="catalog-layout"><section class="card"><div class="card-title"><h3>Catálogos disponibles</h3></div><div class="catalog-list">${catalogs.map(x=>`<button class="catalog-choice ${x[0]===c[0]?"active":""}" data-cat="${x[0]}">${x[1]}</button>`).join("")}</div><div class="catalog-subtitle">CATÁLOGOS PERSONALIZADOS</div><div class="catalog-list">${(customs||[]).map(x=>`<button class="catalog-choice" data-custom-cat="${x.id}">${esc(x.nombre)} ${x.activo?"":"· Inactivo"}</button>`).join("")||'<p class="muted small">Todavía no has creado categorías personalizadas.</p>'}</div><button class="btn secondary small full" id="add-custom-catalog-side">＋ Crear catálogo</button></section>
   <section class="card"><div class="card-title"><div><h3>${c[1]}</h3><p>${data.length} valores · ${data.filter(x=>x.activo).length} activos</p></div><button class="btn primary small" id="add-cat">＋ Nuevo valor</button></div>
   <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>ALIAS EXCEL</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo||"—")}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc((x.alias_excel||[]).join(", ")||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-edit="${x.id}">Editar</button><button class="btn danger small" data-delete="${x.id}">Eliminar</button></div></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">Este catálogo todavía está vacío. Puedes crear el primer valor.</td></tr>'}</tbody></table></div></section></div>`;
-  $$("[data-cat]").forEach(b=>b.onclick=()=>{catalog=b.dataset.cat;catalogosView($("#view-container"))});
+  $$("[data-cat]").forEach(b=>b.onclick=()=>{catalog=b.dataset.cat;customCatalogId=null;catalogosView($("#view-container"))});
+  $$("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
+  $("#add-custom-catalog").onclick=()=>customCatalogModal();$("#add-custom-catalog-side").onclick=()=>customCatalogModal();
   $("#add-cat").onclick=()=>catalogModal();
   $$("[data-edit]").forEach(b=>b.onclick=()=>catalogModal(data.find(x=>x.id===b.dataset.edit)));
   $$("[data-delete]").forEach(b=>b.onclick=async()=>{try{await deleteCatalogValue(data.find(x=>x.id===b.dataset.delete))}catch(err){msg("No se pudo eliminar: "+err.message)}});
