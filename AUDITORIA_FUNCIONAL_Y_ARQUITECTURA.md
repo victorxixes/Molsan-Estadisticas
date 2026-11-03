@@ -123,8 +123,7 @@ Estas funciones constituyen el inventario funcional de partida. No se propone el
 **K. Errores de mantenimiento**
 - `main.js` abre `molsanDB` pero la función de reinicio intenta borrar `molsan_db`; no es la misma base.
 - `backup.html` invoca un nombre de función que no existe en la lógica actual.
-- Algunos informes usan `chartActual` sin declarar una variable compartida coherente, mientras otros usan el array `charts`; esto puede provocar errores al cambiar de informe y destruir gráficos.
-- `informes-core.js` y `informes-evolutivo.js` declaran `MESES_ORDEN` con `const` en ámbito global. En scripts clásicos, declarar el mismo identificador léxico global puede producir un error de redeclaración y detener la carga del segundo script.
+- Algunos informes usan `chartActual` fuera del registro compartido `charts`; `resetChart()` solo destruye los elementos del array, de modo que los gráficos creados por esas funciones no quedan gestionados por el mismo ciclo de vida y pueden acumular instancias al regenerarse.
 - **Acción:** módulos con ámbito explícito, registro único de gráficos y pruebas de carga de todos los módulos.
 
 **L. Actas**
