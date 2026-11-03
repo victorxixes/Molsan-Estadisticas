@@ -3,7 +3,7 @@ const SUPABASE_URL="https://agiagymgogwikxfounqd.supabase.co", SUPABASE_KEY="sb_
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,storage:sessionStorage,autoRefreshToken:true,detectSessionInUrl:true}});
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const catalogs=[["estadisticas_apoderados","Apoderados"],["estadisticas_centros","Centros"],["estadisticas_circuitos","Circuitos"],["estadisticas_tipos_firma","Tipos de firma"],["estadisticas_oficinas","Oficinas"],["estadisticas_tipos_entidad","Tipos de entidad"],["estadisticas_tipos_gestion","Tipos de gestión"]];
-const titles={dashboard:"Dashboard",expedientes:"Expedientes",notarios:"Notarios",importacion:"Importación mensual",informes:"Informes",evolucion:"Evolución",catalogos:"Catálogos",campos:"Campos calculados",ajustes:"Configuración"};let view="dashboard",catalog=catalogs[0][0],customCatalogId=null,notaryPage=0,notarySearch="";
+const titles={dashboard:"Dashboard",expedientes:"Expedientes",notarios:"Notarios",importacion:"Importación mensual",informes:"Informes",evolucion:"Evolución",catalogos:"Catálogos",campos:"Campos calculados",reglas:"Reglas de negocio",ajustes:"Configuración"};let view="dashboard",catalog=catalogs[0][0],customCatalogId=null,notaryPage=0,notarySearch="";
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function msg(t){let e=$("#toast");e.textContent=t;e.classList.add("show");setTimeout(()=>e.classList.remove("show"),3000)}
 function head(t,s,a=""){return `<div class="page-head"><div><h1>${t}</h1><p>${s}</p></div><div class="head-actions">${a}</div></div>`}
@@ -12,7 +12,7 @@ function quick(i,n,d,v){return `<button class="quick-card" data-goto="${v}"><spa
 function wire(){ $$("[data-goto]").forEach(b=>b.onclick=()=>setView(b.dataset.goto));}
 async function count(t){let {count,error}=await sb.from(t).select("*",{count:"exact",head:true});if(error)throw error;return count||0}
 async function setView(v){view=v;$("#crumb-current").textContent=titles[v];$$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));await render()}
-async function render(){let h=$("#view-container");h.innerHTML='<div class="notice">Consultando Supabase…</div>';try{if(view==="dashboard")await dashboard(h);else if(view==="expedientes")await expedientes(h);else if(view==="notarios")await notarios(h);else if(view==="importacion")await importacion(h);else if(view==="catalogos")await catalogosView(h);else if(view==="campos")await campos(h);else if(view==="ajustes")ajustes(h);else informes(h)}catch(e){h.innerHTML=head(titles[view],"No se pudo cargar esta sección.")+`<div class="notice">${esc(e.message)}</div>`}}
+async function render(){let h=$("#view-container");h.innerHTML='<div class="notice">Consultando Supabase…</div>';try{if(view==="dashboard")await dashboard(h);else if(view==="expedientes")await expedientes(h);else if(view==="notarios")await notarios(h);else if(view==="importacion")await importacion(h);else if(view==="catalogos")await catalogosView(h);else if(view==="campos")await campos(h);else if(view==="reglas")await reglas(h);else if(view==="ajustes")ajustes(h);else informes(h)}catch(e){h.innerHTML=head(titles[view],"No se pudo cargar esta sección.")+`<div class="notice">${esc(e.message)}</div>`}}
 async function dashboard(h,selectedMonth=null,selectedYear=null){
   const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro,apoderado,oficina_origen,oficina";
   let all=[],from=0,batch=1000;
@@ -421,6 +421,144 @@ async function campos(h){
   $("#new-field").onclick=()=>campoCalculadoModal();
   $$("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
 }
+
+const ruleSourceFields=[
+  ["contrato","Contrato"],["apoderado","Apoderado"],["oficina","Oficina"],["fecha_alta","Fecha alta"],
+  ["tipo_provision","Tipo provisión"],["notario","Notario"],["provincia","Provincia"],["municipio","Municipio"],
+  ["comunidad","Comunidad"],["protocolo","Protocolo"],["fecha_protocolo","Fecha protocolo"],["vc","V.C."],
+  ["envio_notario","Envío notario"],["dias_excel","Días"],["centro","Centro"],["circuito","Circuito"],
+  ["tipo_firma","Tipo de firma"],["oficina_origen","Oficina de origen"],["tipo_gestion","Tipo de gestión"]
+];
+function defaultEntityRule(){
+  return {schema:1,logica:"OR",condiciones:[
+    {campo:"contrato",operador:"in",valores:["9272","9320","9620"],resultado:"Caixabank"},
+    {campo:"apoderado",operador:"in",valores:["Colaboradores","Molsan"],resultado:"Caixabank"}
+  ],por_defecto:"Otra entidad"};
+}
+function ruleConditionMatches(record,c){
+  const raw=record?.[c.campo],value=norm(raw??""),values=(c.valores||[]).map(v=>norm(v));
+  if(c.operador==="empty")return !value;
+  if(c.operador==="not_empty")return !!value;
+  if(c.operador==="in")return values.includes(value);
+  if(c.operador==="equals")return value===values[0];
+  if(c.operador==="not_equals")return value!==values[0];
+  if(c.operador==="contains")return values[0]?value.includes(values[0]):false;
+  if(c.operador==="greater_than")return Number(raw)>Number(c.valores?.[0]);
+  if(c.operador==="less_than")return Number(raw)<Number(c.valores?.[0]);
+  return false;
+}
+function evaluateRuleDefinition(record,definition){
+  const conditions=definition?.condiciones||[];
+  if(!conditions.length)return definition?.por_defecto??null;
+  const matches=conditions.filter(c=>ruleConditionMatches(record,c));
+  const passed=definition.logica==="AND"?matches.length===conditions.length:matches.length>0;
+  return passed?(matches[0]?.resultado??definition.por_defecto??null):(definition.por_defecto??null);
+}
+async function ensureEntityRule(){
+  let {data:fields,error}=await sb.from("estadisticas_campos_calculados").select("*").eq("codigo","tipo_entidad").limit(1);
+  if(error)throw error;
+  let field=fields?.[0];
+  if(!field){
+    const created=await sb.from("estadisticas_campos_calculados").insert({codigo:"tipo_entidad",nombre:"Tipo de entidad",tipo_dato:"texto",descripcion:"Clasificación de la entidad a partir del contrato y el apoderado.",activo:true,orden:10}).select("*").single();
+    if(created.error)throw created.error;field=created.data;
+  }
+  const {data:rules,error:ruleError}=await sb.from("estadisticas_reglas_calculo").select("id").eq("campo_id",field.id).limit(1);
+  if(ruleError)throw ruleError;
+  if(!rules?.length){
+    const {error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version:1,definicion:defaultEntityRule(),activa:true,motor:"expresion_v1",notas:"Regla inicial acordada: contrato 9272, 9320 o 9620; o apoderado Colaboradores o Molsan = Caixabank. Resto = Otra entidad."});
+    if(insertError)throw insertError;
+  }
+  return field;
+}
+async function reglas(h){
+  await ensureEntityRule();
+  const {data:fields,error}=await sb.from("estadisticas_campos_calculados").select("*").order("orden").order("nombre");
+  if(error)throw error;
+  const {data:rules,error:ruleError}=await sb.from("estadisticas_reglas_calculo").select("*").order("version",{ascending:false});
+  if(ruleError)throw ruleError;
+  const byField=new Map();
+  (rules||[]).forEach(r=>{if(!byField.has(r.campo_id))byField.set(r.campo_id,[]);byField.get(r.campo_id).push(r)});
+  const activeFields=(fields||[]).filter(f=>f.activo!==false);
+  h.innerHTML=head("Reglas de negocio","Administra las condiciones que clasifican y calculan información sin modificar el Excel original.",'<button class="btn secondary small" data-goto="campos">ƒ Campos calculados</button>')
+    +'<div class="notice"><strong>Reglas versionadas.</strong> Cada cambio crea una nueva versión y conserva las anteriores. Puedes probar una regla con expedientes reales antes de activarla. La previsualización no modifica expedientes ni históricos.</div>'
+    +'<section class="card"><div class="card-title"><div><h3>Reglas por campo calculado</h3><p>'+activeFields.length+' campos · '+(rules||[]).length+' versiones guardadas</p></div></div>'
+    +(activeFields.length?activeFields.map(f=>{
+      const history=byField.get(f.id)||[],active=history.find(x=>x.activa)||history[0],version=active?.version||0;
+      return '<article class="rule-card"><div class="rule-card-main"><div><span class="eyebrow">'+esc(f.codigo)+'</span><h3>'+esc(f.nombre)+'</h3><p>'+esc(f.descripcion||"Sin descripción")+'</p></div><span class="pill '+(active?.activa?"green":"")+'">'+(active?"Versión "+version+(active.activa?" · Activa":" · Inactiva"):"Sin regla")+'</span></div><div class="rule-card-actions"><span class="muted small">'+history.length+' versión(es) guardadas</span><div class="row-actions"><button class="btn secondary small" data-rule-preview="'+f.id+'" '+(!active?"disabled":"")+'>Probar regla</button><button class="btn primary small" data-rule-edit="'+f.id+'">'+(active?"Editar / nueva versión":"Crear regla")+'</button></div></div></article>';
+    }).join(""):'<div class="empty-row">Todavía no hay campos calculados.</div>')
+    +'</section><div id="rule-preview-output"></div>';
+  wire();
+  $("[data-rule-edit]").forEach(b=>b.onclick=()=>reglaModal(activeFields.find(f=>f.id===b.dataset.ruleEdit),byField.get(b.dataset.ruleEdit)?.find(x=>x.activa)||byField.get(b.dataset.ruleEdit)?.[0]||null));
+  $("[data-rule-preview]").forEach(b=>b.onclick=async()=>{
+    const field=activeFields.find(f=>f.id===b.dataset.rulePreview),rule=byField.get(field.id)?.find(x=>x.activa)||byField.get(field.id)?.[0];
+    if(!rule)return;
+    await previewRule(field,rule.definicion,$("#rule-preview-output"));
+  });
+}
+function ruleConditionRow(condition,index){
+  const operators=[["in","Es uno de"],["equals","Es igual a"],["not_equals","Es distinto de"],["contains","Contiene"],["empty","Está vacío"],["not_empty","No está vacío"],["greater_than","Mayor que"],["less_than","Menor que"]];
+  const fields=ruleSourceFields.map(f=>'<option value="'+f[0]+'" '+(condition.campo===f[0]?"selected":"")+'>'+f[1]+'</option>').join("");
+  const ops=operators.map(o=>'<option value="'+o[0]+'" '+((condition.operador||"in")===o[0]?"selected":"")+'>'+o[1]+'</option>').join("");
+  return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna de origen</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado si coincide</label><input data-rule-result value="'+esc(condition.resultado||"")+'" placeholder="Resultado"></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
+}
+function collectRuleDefinition(){
+  const conditions=$(".rule-condition").map(row=>{
+    const op=row.querySelector("[data-rule-operator]").value;
+    const raw=row.querySelector("[data-rule-values]").value.trim();
+    const values=op==="empty"||op==="not_empty"?[]:(op==="in"?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
+    return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:row.querySelector("[data-rule-result]").value.trim()};
+  });
+  return {schema:1,logica:$("#rule-logic").value,condiciones:conditions,por_defecto:$("#rule-default").value.trim()};
+}
+async function reglaModal(field,currentRule=null){
+  if(!field)return;
+  const {data:history,error}=await sb.from("estadisticas_reglas_calculo").select("*").eq("campo_id",field.id).order("version",{ascending:false});
+  if(error)throw error;
+  const current=history?.find(x=>x.activa)||currentRule||history?.[0]||null;
+  const definition=current?.definicion||{schema:1,logica:"OR",condiciones:[],por_defecto:""};
+  const modal=document.createElement("div");modal.id="rules-modal";modal.className="modal-backdrop";
+  modal.innerHTML='<section class="modal-card rules-modal-card" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title"><div class="modal-head"><div><span class="eyebrow">MOTOR DE REGLAS · '+esc(field.codigo)+'</span><h2 id="rules-modal-title">'+esc(field.nombre)+'</h2><p>Define las condiciones y el resultado de cada clasificación.</p></div><button type="button" class="modal-close" id="rules-close" aria-label="Cerrar">×</button></div><form id="rules-form"><div class="field-grid"><div class="field"><label for="rule-logic">Aplicar condiciones con</label><select id="rule-logic"><option value="OR" '+(definition.logica!=="AND"?"selected":"")+'>Cualquiera (O)</option><option value="AND" '+(definition.logica==="AND"?"selected":"")+'>Todas (Y)</option></select></div><div class="field"><label for="rule-default">Resultado si ninguna coincide</label><input id="rule-default" maxlength="180" value="'+esc(definition.por_defecto||"")+'" placeholder="Ej. Otra entidad"></div></div><div class="rule-editor-heading"><div><h3>Condiciones</h3><p>Se evalúan según el operador Y / O seleccionado.</p></div><button type="button" class="btn secondary small" id="rule-add-condition">＋ Añadir condición</button></div><div id="rule-condition-list">'+(definition.condiciones||[]).map((c,i)=>ruleConditionRow(c,i)).join("")+'</div><div id="rule-modal-preview" class="rule-preview-inline"></div><div class="modal-actions"><span class="muted small">Nueva versión: v'+((history?.reduce((m,r)=>Math.max(m,r.version||0),0)||0)+1)+'</span><button type="button" class="btn secondary" id="rule-test">Probar antes de guardar</button><button type="button" class="btn secondary" id="rules-cancel">Cancelar</button><button type="submit" class="btn primary" id="rules-save">Guardar y activar versión</button></div></form></section>';
+  document.body.append(modal);
+  const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  const bindRows=()=>{
+    $("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
+    $("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty"].includes(s.value)});
+  };
+  const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
+    const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
+  };
+  bindRows();$("#rule-add-condition").onclick=()=>addCondition();
+  $("#rule-test").onclick=async()=>{
+    const d=collectRuleDefinition(),out=$("#rule-modal-preview");out.innerHTML='<span class="muted small">Probando con expedientes...</span>';
+    try{await previewRule(field,d,out)}catch(e){out.innerHTML='<div class="notice">No se pudo probar: '+esc(e.message)+'</div>'}
+  };
+  $("#rules-form").onsubmit=async e=>{
+    e.preventDefault();const save=$("#rules-save");save.disabled=true;save.textContent="Guardando…";
+    const d=collectRuleDefinition();
+    if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||!c.resultado||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
+    const now=new Date().toISOString();
+    try{
+      const version=(history||[]).reduce((m,r)=>Math.max(m,r.version||0),0)+1;
+      const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version,definicion:d,activa:false,motor:"expresion_v1",notas:"Regla configurada desde el módulo Reglas de negocio."}).select("id").single();
+      if(insertError)throw insertError;
+      const {error:deactivateError}=await sb.from("estadisticas_reglas_calculo").update({activa:false,vigente_hasta:now}).eq("campo_id",field.id).eq("activa",true);
+      if(deactivateError)throw deactivateError;
+      const {error:activateError}=await sb.from("estadisticas_reglas_calculo").update({activa:true,vigente_desde:now,vigente_hasta:null}).eq("id",newRule.id);
+      if(activateError)throw activateError;
+      close();msg("Regla v"+version+" guardada y activada");await reglas($("#view-container"));
+    }catch(err){msg("No se pudo guardar: "+err.message);save.disabled=false;save.textContent="Guardar y activar versión"}
+  };
+}
+async function previewRule(field,definition,target){
+  const columns=ruleSourceFields.map(x=>x[0]).join(",");
+  const {data,error}=await sb.from("estadisticas_registros").select("id,expediente,"+columns).limit(5000);
+  if(error)throw error;
+  const rows=data||[],counts={};
+  const results=rows.map(r=>{const value=evaluateRuleDefinition(r,definition);const label=String(value??"Sin resultado");counts[label]=(counts[label]||0)+1;return {...r,_rule_value:label}});
+  const samples=results.slice(0,8).map(r=>'<tr><td>'+esc(r.expediente||"—")+'</td><td>'+esc(r.contrato||"—")+'</td><td>'+esc(r.apoderado||"—")+'</td><td><strong>'+esc(r._rule_value)+'</strong></td></tr>').join("");
+  target.innerHTML='<section class="card rule-preview-card"><div class="card-title"><div><h3>Previsualización · '+esc(field.nombre)+'</h3><p>'+rows.length+' expedientes revisados · sin cambios en los datos</p></div><span class="pill green">Solo simulación</span></div><div class="rule-result-stats">'+Object.entries(counts).map(([k,v])=>'<div><small>'+esc(k)+'</small><strong>'+v+'</strong></div>').join("")+'</div><div class="table-wrap"><table><thead><tr><th>EXPEDIENTE</th><th>CONTRATO</th><th>APODERADO</th><th>RESULTADO PREVISTO</th></tr></thead><tbody>'+(samples||'<tr><td colspan="4" class="empty-row">No hay expedientes para probar.</td></tr>')+'</tbody></table></div><p class="field-help">La prueba no actualiza la columna Tipo de entidad ni los históricos. La aplicación automática se conectará al proceso de importación después de validar el motor.</p></section>';
+}
+
 function informes(h){h.innerHTML=head(titles[view],view==="evolucion"?"Consulta la evolución mensual, anual y comparativa.":"Los informes se alimentarán del histórico validado.")+`<div class="grid quick-grid">${quick("▥","Actividad por oficina","Volumen y distribución","expedientes")}${quick("⌁","Tiempos de firma","Días entre hitos","expedientes")}${quick("▧","Centro y circuito","Distribución de actividad","catalogos")}</div><section class="card" style="margin-top:17px"><div class="empty-chart"><div><strong>Informes preparados</strong>Se activarán con el primer periodo validado.</div></div></section>`;wire()}
 function ajustes(h){h.innerHTML=head("Configuración","Preferencias generales y seguridad del espacio de trabajo.")+`<div class="grid content-grid"><section class="card"><div class="card-title"><h3>Acceso y seguridad</h3><span class="pill green">Activo</span></div><div class="status-line"><span>Usuario autorizado</span><b>${OWNER}</b></div><div class="status-line"><span>Proveedor de identidad</span><b>Supabase Auth OTP</b></div><div class="status-line"><span>Persistencia de datos</span><b>Supabase PostgreSQL</b></div><div class="status-line"><span>Almacenamiento de negocio local</span><b class="ok">Desactivado</b></div></section><section class="card"><div class="card-title"><h3>Plataforma</h3></div><div class="status-line"><span>Región</span><b>EU · Irlanda</b></div><div class="status-line"><span>Zona horaria</span><b>Europe/Madrid</b></div><div class="status-line"><span>Histórico mensual</span><b>Preparado</b></div></section></div>`}
 async function boot(){let {data:{session}}=await sb.auth.getSession();if(session?.user?.email?.toLowerCase()===OWNER)showApp();else if(session){await sb.auth.signOut();$("#auth-screen").classList.remove("hidden")}}
