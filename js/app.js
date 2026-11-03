@@ -13,9 +13,68 @@ function wire(){ $$("[data-goto]").forEach(b=>b.onclick=()=>setView(b.dataset.go
 async function count(t){let {count,error}=await sb.from(t).select("*",{count:"exact",head:true});if(error)throw error;return count||0}
 async function setView(v){view=v;$("#crumb-current").textContent=titles[v];$$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));await render()}
 async function render(){let h=$("#view-container");h.innerHTML='<div class="notice">Consultando Supabase…</div>';try{if(view==="dashboard")await dashboard(h);else if(view==="expedientes")await expedientes(h);else if(view==="notarios")await notarios(h);else if(view==="importacion")await importacion(h);else if(view==="catalogos")await catalogosView(h);else if(view==="campos")await campos(h);else if(view==="ajustes")ajustes(h);else informes(h)}catch(e){h.innerHTML=head(titles[view],"No se pudo cargar esta sección.")+`<div class="notice">${esc(e.message)}</div>`}}
-async function dashboard(h){let [a,b,c,d]=await Promise.all([count("estadisticas_registros"),count("estadisticas_importaciones"),count("estadisticas_campos_calculados"),Promise.all([Promise.all(catalogs.map(x=>count(x[0]))).then(x=>x.reduce((m,n)=>m+n,0)),count("estadisticas_valores_catalogos_personalizados")]).then(x=>x[0]+x[1])]);h.innerHTML=head("Dashboard","Visión general de la actividad y del estado de los datos.",'<button class="btn secondary small" id="refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Nueva importación</button>')+`<div class="grid kpi-grid">${kpi("▤","Expedientes",a.toLocaleString("es-ES"),"Registros consolidados")}${kpi("⇧","Importaciones",b.toLocaleString("es-ES"),"Lotes mensuales")}${kpi("ƒ","Campos calculados",c.toLocaleString("es-ES"),"Definiciones administrables")}${kpi("▧","Valores de catálogo",d.toLocaleString("es-ES"),"En catálogos base y personalizados")}</div><div class="grid content-grid"><section class="card"><div class="card-title"><div><h3>Actividad mensual</h3><p>Histórico de importaciones y expedientes</p></div><span class="pill">Histórico</span></div><div class="empty-chart"><div><strong>Tu evolución aparecerá aquí</strong>Al importar el primer Excel mensual, verás la actividad por periodos.</div></div></section><section class="card"><div class="card-title"><div><h3>Estado del proyecto</h3><p>Infraestructura y preparación</p></div><span class="pill green">Operativo</span></div><div class="status-line"><span>Base de datos Supabase</span><b class="ok">Conectada</b></div><div class="status-line"><span>Acceso individual</span><b class="ok">Protegido</b></div><div class="status-line"><span>Importador mensual</span><b>Preparado</b></div><div class="status-line"><span>Motor de reglas</span><b>En configuración</b></div></section></div><div class="section-label">ACCESOS RÁPIDOS</div><div class="grid quick-grid">${quick("⇧","Importar Excel","Validar un nuevo periodo","importacion")}${quick("▧","Administrar catálogos","Mantener centros, oficinas y tipos","catalogos")}${quick("ƒ","Campos calculados","Crear nuevas métricas y reglas","campos")}</div>`;$("#refresh").onclick=render;wire()}
-async function expedientes(h){
-  const columns=[
+async function dashboard(h,selectedMonth=null,selectedYear=null){
+  const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro,apoderado,oficina_origen,oficina";
+  let all=[],from=0,batch=1000;
+  while(true){
+    const {data,error}=await sb.from("estadisticas_registros").select(fields).not("fecha_protocolo","is",null).order("fecha_protocolo",{ascending:false}).range(from,from+batch-1);
+    if(error)throw error;
+    all=all.concat(data||[]);
+    if(!data||data.length<batch)break;
+    from+=batch;
+  }
+  const dateParts=r=>String(r.fecha_protocolo||"").slice(0,10).split("-").map(Number);
+  const years=[...new Set(all.map(r=>dateParts(r)[0]).filter(Boolean))].sort((a,b)=>b-a);
+  const latest=all.map(r=>dateParts(r)).find(p=>p.length===3&&p[0])||[new Date().getFullYear(),new Date().getMonth()+1,1];
+  const year=Number(selectedYear)||latest[0],month=Number(selectedMonth)||latest[1];
+  const startDate=new Date(Date.UTC(year,month-1,1)),prevDate=new Date(Date.UTC(year,month-2,1));
+  const key=d=>d.toISOString().slice(0,7);
+  const currentKey=key(startDate),previousKey=key(prevDate);
+  const monthRows=all.filter(r=>String(r.fecha_protocolo||"").slice(0,7)===currentKey);
+  const previousRows=all.filter(r=>String(r.fecha_protocolo||"").slice(0,7)===previousKey);
+  const monthName=d=>new Intl.DateTimeFormat("es-ES",{month:"long",year:"numeric",timeZone:"UTC"}).format(d);
+  const titleMonth=monthName(startDate),titlePrevious=monthName(prevDate);
+  const pct=(n,total)=>total?Math.round(n/total*100):0;
+  const grouped=(rows,getter,empty="Pendiente de clasificar")=>{
+    const map={};rows.forEach(r=>{const raw=getter(r);const label=String(raw||"").trim()||empty;map[label]=(map[label]||0)+1});
+    return Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([label,value])=>({label,value}));
+  };
+  const firma=r=>{
+    const f=String(r.tipo_firma||"").trim().toLowerCase();
+    if(f==="presencial")return "Presencial";
+    if(f==="videoconferencia"||f==="videoconferencia")return "Videoconferencia";
+    const vc=String(r.vc||"").trim().toUpperCase();
+    if(vc==="S"||vc==="SI"||vc==="SÍ"||vc==="TRUE")return "Videoconferencia";
+    if(vc==="N"||vc==="NO"||vc==="FALSE")return "Presencial";
+    return "Pendiente de clasificar";
+  };
+  const list=(title,sub,items,total)=>{
+    const max=Math.max(1,...items.map(x=>x.value));
+    return `<section class="card dash-analysis-card"><div class="card-title"><div><h3>${title}</h3><p>${sub}</p></div><span class="pill">${total} expedientes</span></div>
+      ${items.length?items.slice(0,8).map(x=>`<div class="dash-bar-row"><div class="dash-bar-label"><span>${esc(x.label)}</span><strong>${x.value} <small>${pct(x.value,total)}%</small></strong></div><div class="dash-bar-track"><i style="width:${Math.max(2,x.value/max*100)}%"></i></div></div>`).join(""):'<div class="dash-empty">No hay datos para este periodo.</div>'}
+      </section>`;
+  };
+  const delta=monthRows.length-previousRows.length;
+  const deltaText=previousRows.length?(delta>0?"+":"")+delta+" vs. mes anterior":"Sin datos del mes anterior";
+  const monthOpts=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===month?"selected":""}>${new Intl.DateTimeFormat("es-ES",{month:"long"}).format(new Date(2020,m-1,1))}</option>`).join("");
+  const yearOpts=(years.length?years:[year]).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("");
+  const firmaItems=grouped(monthRows,firma);
+  const centroItems=grouped(monthRows,r=>r.centro);
+  const apoderadoItems=grouped(monthRows,r=>r.apoderado);
+  const oficinaItems=grouped(monthRows,r=>r.oficina_origen||r.oficina);
+  h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Importar Excel</button>')
+    +`<section class="card dash-filter-card"><div><strong>Periodo de análisis</strong><small>Compara el mes seleccionado con el inmediatamente anterior</small></div><div class="dash-filters"><label>Mes<select id="dash-month">${monthOpts}</select></label><label>Año<select id="dash-year">${yearOpts}</select></label></div></section>`
+    +`<div class="grid kpi-grid dash-kpis">${kpi("▤","Expedientes del mes",monthRows.length.toLocaleString("es-ES"),titleMonth)}${kpi("↗","Mes anterior",previousRows.length.toLocaleString("es-ES"),titlePrevious)}${kpi(delta>=0?"↑":"↓","Variación",previousRows.length?(delta>0?"+":"")+delta:"—",deltaText)}${kpi("✍","Apoderados activos",new Set(monthRows.map(r=>r.apoderado).filter(Boolean)).size.toLocaleString("es-ES"),"Con expedientes en el periodo")}</div>`
+    +`<div class="dash-section-heading"><div><h2>Actividad de firma</h2><p>Distribución de los expedientes del periodo seleccionado</p></div><span class="pill">${monthRows.length} registros</span></div>`
+    +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Actividad por apoderado","Quién firma cada expediente",apoderadoItems,monthRows.length)}${list("Oficina de origen","Procedencia de los expedientes",oficinaItems,monthRows.length)}</div>`
+    +`<section class="card dash-comparison"><div class="card-title"><div><h3>Comparativa mensual</h3><p>${titleMonth} frente a ${titlePrevious}</p></div><span class="pill">${previousRows.length?"Comparación disponible":"Pendiente de histórico"}</span></div><div class="dash-compare-grid"><div><small>${titleMonth}</small><strong>${monthRows.length}</strong><span>Expedientes</span></div><div><small>${titlePrevious}</small><strong>${previousRows.length}</strong><span>Expedientes</span></div><div><small>Diferencia</small><strong class="${delta>0?"positive":delta<0?"negative":""}">${previousRows.length?(delta>0?"+":"")+delta:"—"}</strong><span>${previousRows.length?(delta>0?"Más expedientes":delta<0?"Menos expedientes":"Sin variación"):"No hay datos del mes anterior"}</span></div></div></section>`
+    +`<div class="dash-footnote">El periodo se determina por la fecha de protocolo. Los centros y las oficinas de origen que todavía no estén identificados aparecen como pendientes, sin atribuciones automáticas.</div>`;
+  $("#dash-refresh").onclick=()=>dashboard(h,month,year);
+  $("#dash-month").onchange=e=>dashboard(h,Number(e.target.value),year);
+  $("#dash-year").onchange=e=>dashboard(h,month,Number(e.target.value));
+  wire();
+}
+async function expedientes(h){  const columns=[
     ["expediente","EXPEDIENTE"],["oficina","OFICINA"],["fecha_alta","FECHA ALTA"],
     ["contrato","CONTRATO"],["tipo_provision","TIPO PROVISIÓN"],["notario","NOTARIO"],
     ["provincia","PROVINCIA"],["municipio","MUNICIPIO"],["comunidad","COMUNIDAD"],
