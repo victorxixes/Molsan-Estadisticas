@@ -10,3 +10,37 @@
 
 /* Directorio notarial */
 .notary-modal{width:min(900px,100%);max-height:calc(100vh - 36px);overflow:auto}.notary-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.notary-detail-field{background:var(--ice);border:1px solid var(--line);border-radius:11px;padding:11px;min-width:0}.notary-detail-field small{display:block;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin-bottom:5px}.notary-detail-field strong{display:block;color:var(--blue);font-size:12px;line-height:1.45;overflow-wrap:anywhere}.notary-associates{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}.notary-associates h3{color:var(--blue);font-size:14px}.notary-modal .field textarea{min-height:74px}@media(max-width:720px){.notary-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Dashboard analítico mensual */
+.dash-filter-card{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:17px;padding:17px 20px}
+.dash-filter-card>div:first-child strong,.dash-filter-card>div:first-child small{display:block}
+.dash-filter-card>div:first-child strong{font-size:13px;color:#25465d}
+.dash-filter-card>div:first-child small{font-size:10px;color:var(--muted);margin-top:4px}
+.dash-filters{display:flex;gap:10px;align-items:end}
+.dash-filters label{display:grid;gap:5px;color:#617789;font-size:10px;font-weight:700}
+.dash-filters select{min-width:132px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#25465d;font:inherit;font-size:11px}
+.dash-kpis{margin-bottom:22px}
+.dash-section-heading{display:flex;align-items:end;justify-content:space-between;margin:8px 0 13px}
+.dash-section-heading h2{font-size:17px;color:var(--blue);margin:0}
+.dash-section-heading p{font-size:11px;color:var(--muted);margin:5px 0 0}
+.dash-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.dash-analysis-card{min-width:0}
+.dash-analysis-card .card-title{margin-bottom:18px}
+.dash-bar-row{margin:13px 0}
+.dash-bar-label{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;color:#466174;margin-bottom:7px}
+.dash-bar-label span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-bar-label strong{white-space:nowrap;color:#25465d;font-size:11px}
+.dash-bar-label small{font-size:9px;color:var(--muted);font-weight:500;margin-left:4px}
+.dash-bar-track{height:7px;border-radius:10px;background:#edf3f7;overflow:hidden}
+.dash-bar-track i{display:block;height:100%;border-radius:10px;background:linear-gradient(90deg,#064675,#4b8bb4)}
+.dash-empty{padding:24px 8px;text-align:center;color:#8197a7;font-size:11px;background:#f8fbfd;border-radius:10px}
+.dash-comparison{margin-top:16px}
+.dash-compare-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dash-compare-grid>div{padding:15px;border:1px solid var(--line);border-radius:12px;background:#fbfdfe}
+.dash-compare-grid small,.dash-compare-grid span{display:block;color:var(--muted);font-size:10px}
+.dash-compare-grid strong{display:block;color:var(--blue);font-size:25px;font-weight:800;margin:7px 0 4px}
+.dash-compare-grid strong.positive{color:#27805f}
+.dash-compare-grid strong.negative{color:#b45c54}
+.dash-footnote{margin:12px 2px 0;color:#7b91a1;font-size:10px;line-height:1.5}
+@media(max-width:760px){.dash-filter-card{align-items:stretch;flex-direction:column}.dash-filters{width:100%}.dash-filters label{flex:1}.dash-filters select{min-width:0;width:100%}.dash-analysis-grid{grid-template-columns:1fr}.dash-compare-grid{grid-template-columns:1fr}.dash-section-heading{align-items:start;gap:8px;flex-direction:column}}
