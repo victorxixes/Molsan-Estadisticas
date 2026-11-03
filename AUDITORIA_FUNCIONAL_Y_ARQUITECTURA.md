@@ -107,9 +107,11 @@ Estas funciones constituyen el inventario funcional de partida. No se propone el
 
 **I. Módulos duplicados o desconectados**
 - Hay plantillas bajo `modules/` que duplican vistas integradas en `index.html`.
-- Las plantillas externas `modules/backup.html` y `modules/restore.html` no están integradas en el `index.html` inspeccionado.
-- La plantilla de backup usa `crearBackup()`, mientras la lógica expone `generarBackup()`; tampoco se registra el botón que esa plantilla declara.
-- La plantilla de restauración usa IDs como `restorePreview`, mientras la lógica busca `previewContainer`, `previewFecha`, `previewTotal`, `previewTabla`, etc. El contrato entre HTML y JS no coincide.
+- Las plantillas externas `modules/backup.html` y `modules/restore.html` no están integradas en el `index.html`. Sin embargo, la configuración contiene botones que llaman a `cargarModulo('backup')` y `cargarModulo('restore')`; como no existen `tpl-backup` ni `tpl-restore` en el DOM, esas rutas no pueden cargar su vista.
+- La plantilla externa de backup usa `crearBackup()`, mientras la lógica expone `generarBackup()`; además, la lógica busca `btnHacerBackup`, que no existe en esa plantilla.
+- La plantilla externa de restauración usa `restorePreview`, mientras la lógica busca `previewContainer`, `previewFecha`, `previewTotal`, `previewTabla`, etc. El contrato entre HTML y JS no coincide.
+- `panel-tipo-mensual.js` está cargado, pero no existe plantilla `tpl-panel-mensual`, entrada de navegación ni caso de inicialización correspondiente en `main.js`; el panel queda huérfano.
+- Los HTML de `modules/` son copias/plantillas independientes y no se cargan automáticamente desde el shell; la fuente efectiva de vistas es el conjunto de plantillas integrado en `index.html`.
 - `main.js` inicializa algunos módulos por claves concretas; el listado de navegación y plantillas debe mantenerse como un único registro para evitar vistas inaccesibles.
 - **Acción:** inventario único de rutas/módulos, componentes y contratos de vista; retirar duplicados solo después de comprobar que ninguna ruta los utiliza.
 
