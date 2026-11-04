@@ -19,9 +19,9 @@ async function appendEvolutionReport(target,c){
  const totals=years.map(y=>months.slice(0,lastMonth).reduce((a,m)=>a+counts[y][m-1],0));
  const max=Math.max(1,...years.flatMap(y=>counts[y].slice(0,y===latest?lastMonth:12)));
  const W=900,H=290,L=55,R=18,T=18,B=40,px=i=>L+i*(W-L-R)/11,py=v=>T+(H-T-B)-(v/max)*(H-T-B);
- const palette=["#064675","#2879a8","#6c9fbd","#7b8f54","#9a704d","#7b6b9d","#4d8990","#ad7b91"];
+ const palette=["#064675","#2879A8","#4F83A3","#739DB7","#8BAFC4","#617789","#3C6F8F","#A8C1D1"];
  const lines=years.map((yr,i)=>{const limit=yr===latest?lastMonth:12,pts=counts[yr].slice(0,limit).map((v,j)=>px(j)+","+py(v)).join(" ");return '<polyline points="'+pts+'" fill="none" stroke="'+palette[i%palette.length]+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'+counts[yr].slice(0,limit).map((v,j)=>'<circle cx="'+px(j)+'" cy="'+py(v)+'" r="3" fill="'+palette[i%palette.length]+'"/>').join("")}).join("");
- const grid=[0,.25,.5,.75,1].map(t=>'<line x1="'+L+'" y1="'+(T+(H-T-B)*t)+'" x2="'+(W-R)+'" y2="'+(T+(H-T-B)*t)+'" stroke="#e8eff4"/><text x="'+(L-8)+'" y="'+(T+(H-T-B)*t+4)+'" text-anchor="end" font-size="10" fill="#71899a">'+n(Math.round(max*(1-t)))+'</text>').join("");
+ const grid=[0,.25,.5,.75,1].map(t=>'<line x1="'+L+'" y1="'+(T+(H-T-B)*t)+'" x2="'+(W-R)+'" y2="'+(T+(H-T-B)*t)+'" stroke="#D8E4EC"/><text x="'+(L-8)+'" y="'+(T+(H-T-B)*t+4)+'" text-anchor="end" font-size="10" fill="#617789">'+n(Math.round(max*(1-t)))+'</text>').join("");
  const labels=M.map((m,i)=>'<text x="'+px(i)+'" y="'+(H-12)+'" text-anchor="middle" font-size="10" fill="#71899a">'+m.slice(0,3)+'</text>').join("");
  const legend=years.map((yr,i)=>'<span class="evolution-legend-item"><i style="background:'+palette[i%palette.length]+'"></i>'+yr+'</span>').join("");
  const delta=i=>i&&totals[i-1]?(totals[i]/totals[i-1]-1):null;
