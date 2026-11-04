@@ -420,9 +420,24 @@ async function campos(h){
   h.innerHTML=head("Campos calculados","Define métricas adicionales, documenta sus reglas y conserva su histórico de versiones.")
   +`<div class="notice">Las reglas activas se evalúan durante la consolidación del Excel. Cada resultado conserva el campo de destino, la regla y su versión; los históricos anteriores no se recalculan al cambiar una regla.</div>
   <section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos · ${data.filter(x=>x.activo).length} activos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div>
-  <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>REGLA</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>{const r=ruleMap.get(x.id);return `<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${r?"v"+r.version+(r.active?" · Activa":" · Inactiva"):"Sin regla"}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><button class="btn secondary small" data-edit-field="${x.id}">Editar</button></td></tr>`}).join(""):'<tr><td colspan="7" class="empty-row">Todavía no hay campos calculados. Crea el primero.</td></tr>'}</tbody></table></div></section>`;
+  <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>REGLA</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>{const r=ruleMap.get(x.id);return `<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${r?"v"+r.version+(r.active?" · Activa":" · Inactiva"):"Sin regla"}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-field-values="${x.id}">Resultados</button><button class="btn secondary small" data-edit-field="${x.id}">Editar</button></div></td></tr>`}).join(""):'<tr><td colspan="7" class="empty-row">Todavía no hay campos calculados. Crea el primero.</td></tr>'}</tbody></table></div></section>`;
   $("#new-field").onclick=()=>campoCalculadoModal();
-  $$("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
+  $("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
+  $("[data-field-values]").forEach(b=>b.onclick=()=>campoValores(data.find(x=>x.id===b.dataset.fieldValues)));
+}
+async function campoValores(field){
+  if(!field)return;
+  const {data:values,error}=await sb.from("estadisticas_valores_calculados").select("id,registro_id,regla_id,valor,calculado_en").eq("campo_id",field.id).order("calculado_en",{ascending:false}).limit(500);
+  if(error)throw error;
+  const recordIds=[...new Set((values||[]).map(x=>x.registro_id))],ruleIds=[...new Set((values||[]).map(x=>x.regla_id))];
+  let records=[],rules=[];
+  if(recordIds.length){const r=await sb.from("estadisticas_registros").select("id,expediente,contrato,apoderado").in("id",recordIds);if(r.error)throw r.error;records=r.data||[]}
+  if(ruleIds.length){const r=await sb.from("estadisticas_reglas_calculo").select("id,version").in("id",ruleIds);if(r.error)throw r.error;rules=r.data||[]}
+  const recordMap=new Map(records.map(x=>[x.id,x])),ruleMap=new Map(rules.map(x=>[x.id,x.version]));
+  const rows=(values||[]).map(v=>{const r=recordMap.get(v.registro_id)||{};return '<tr><td>'+esc(r.expediente||"—")+'</td><td>'+esc(r.contrato||"—")+'</td><td>'+esc(r.apoderado||"—")+'</td><td><strong>'+esc(typeof v.valor==="string"?v.valor:JSON.stringify(v.valor))+'</strong></td><td>v'+esc(ruleMap.get(v.regla_id)??"—")+'</td><td>'+esc(v.calculado_en?new Date(v.calculado_en).toLocaleString("es-ES"):"—")+'</td></tr>'}).join("");
+  const modal=document.createElement("div");modal.className="modal-backdrop";
+  modal.innerHTML='<section class="modal-card rules-modal-card" role="dialog" aria-modal="true"><div class="modal-head"><div><span class="eyebrow">HISTÓRICO DE RESULTADOS</span><h2>'+esc(field.nombre)+'</h2><p>'+values.length+' valores calculados · máximo 500 resultados recientes</p></div><button class="modal-close" type="button" aria-label="Cerrar">×</button></div><div class="table-wrap"><table><thead><tr><th>EXPEDIENTE</th><th>CONTRATO</th><th>APODERADO</th><th>RESULTADO</th><th>REGLA</th><th>CALCULADO</th></tr></thead><tbody>'+(rows||'<tr><td colspan="6" class="empty-row">Todavía no hay resultados calculados para este campo.</td></tr>')+'</tbody></table></div><div class="modal-actions"><button class="btn secondary" type="button" id="field-values-close">Cerrar</button></div></section>';
+  document.body.append(modal);const close=()=>modal.remove();modal.querySelector(".modal-close").onclick=close;modal.querySelector("#field-values-close").onclick=close;modal.onclick=e=>{if(e.target===modal)close()};
 }
 
 const ruleSourceFields=[
