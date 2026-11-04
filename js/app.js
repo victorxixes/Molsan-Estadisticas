@@ -149,8 +149,8 @@ async function importacion(h){
   const MAX_SAFE_CONSOLIDATION_ROWS=10000;
   let reviewPage=0;
   const {data:batches,error:batchError}=await sb.from("estadisticas_importaciones")
-    .select("id,periodo,nombre_archivo,estado,filas_leidas,filas_importadas,filas_rechazadas,creado_en")
-    .order("creado_en",{ascending:false}).limit(10);
+    .select("id,periodo,nombre_archivo,estado,filas_leidas,filas_importadas,filas_rechazadas")
+    .order("periodo",{ascending:false}).order("id",{ascending:false}).limit(10);
   if(batchError)throw batchError;
   const latest=batches?.[0]||null;
   let stagedCount=0,pendingCount=0,errorCount=0,importedCount=0;
@@ -275,7 +275,7 @@ async function importacion(h){
       if(!inserted)throw Error("No se han encontrado filas de datos no vacías en el Excel.");
       const {error:updateError}=await sb.from("estadisticas_importaciones").update({
         estado:bad?"importada_con_errores":"pendiente",filas_leidas:inserted,filas_rechazadas:bad,
-        resumen_validacion:{filas:rows.length,preparadas:inserted,con_errores:bad}
+        resumen_validacion:{filas:inserted,preparadas:inserted,con_errores:bad}
       }).eq("id",batchId);
       if(updateError)throw updateError;
       $("#result").innerHTML='<div class="notice">Preparación finalizada: '+inserted.toLocaleString("es-ES")+' filas preparadas y '+bad.toLocaleString("es-ES")+' con errores. No se ha incorporado nada al histórico.</div>';
