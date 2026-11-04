@@ -145,73 +145,153 @@ function notarioModal(n){
 }
 
 async function importacion(h){
-  const {data:batches,error:batchError}=await sb.from("estadisticas_importaciones").select("id,periodo,nombre_archivo,estado,filas_leidas,filas_importadas,filas_rechazadas,creado_en").order("creado_en",{ascending:false}).limit(10);
+  const PAGE_SIZE=100;
+  let reviewPage=0;
+  const {data:batches,error:batchError}=await sb.from("estadisticas_importaciones")
+    .select("id,periodo,nombre_archivo,estado,filas_leidas,filas_importadas,filas_rechazadas,creado_en")
+    .order("creado_en",{ascending:false}).limit(10);
   if(batchError)throw batchError;
   const latest=batches?.[0]||null;
-  let staged=[];
+  let stagedCount=0,pendingCount=0,errorCount=0,importedCount=0;
   if(latest){
-    const {data,error}=await sb.from("estadisticas_filas_importacion").select("numero_fila,datos_mapeados,estado,errores,registro_id").eq("importacion_id",latest.id).order("numero_fila");
-    if(error)throw error;
-    staged=data||[];
+    const [allRows,pendingRows,errorRows,importedRows]=await Promise.all([
+      sb.from("estadisticas_filas_importacion").select("numero_fila",{count:"exact",head:true}).eq("importacion_id",latest.id),
+      sb.from("estadisticas_filas_importacion").select("numero_fila",{count:"exact",head:true}).eq("importacion_id",latest.id).in("estado",["pendiente","valida"]),
+      sb.from("estadisticas_filas_importacion").select("numero_fila",{count:"exact",head:true}).eq("importacion_id",latest.id).eq("estado","con_errores"),
+      sb.from("estadisticas_filas_importacion").select("numero_fila",{count:"exact",head:true}).eq("importacion_id",latest.id).eq("estado","importada")
+    ]);
+    for(const result of [allRows,pendingRows,errorRows,importedRows])if(result.error)throw result.error;
+    stagedCount=allRows.count||0;pendingCount=pendingRows.count||0;errorCount=errorRows.count||0;importedCount=importedRows.count||0;
   }
-  const batchRows=(batches||[]).map(b=>'<tr><td>'+esc(b.periodo)+'</td><td>'+esc(b.nombre_archivo||"—")+'</td><td>'+esc(b.estado)+'</td><td>'+b.filas_importadas+' / '+b.filas_leidas+'</td></tr>').join("");
-  const rowHtml=staged.map(r=>{
-    const m=r.datos_mapeados||{};
-    const errs=Array.isArray(r.errores)?r.errores.map(x=>x.mensaje||"").filter(Boolean).join("; "):"";
-    return '<tr><td>'+r.numero_fila+'</td><td><strong>'+esc(m.expediente||"—")+'</strong></td><td>'+esc(m.oficina||"—")+'</td><td>'+esc(m.fecha_alta||"—")+'</td><td>'+esc(m.fecha_protocolo||"—")+'</td><td>'+esc(m.envio_notario||"—")+'</td><td>'+esc(m.dias_excel||"—")+'</td><td><span class="pill '+(r.estado==="importada"?"green":r.estado==="con_errores"?"red":"")+'">'+esc(r.estado)+'</span>'+(errs?'<small>'+esc(errs)+'</small>':"")+'</td></tr>';
-  }).join("");
-  const canConsolidate=!!latest&&staged.some(r=>r.estado==="pendiente"||r.estado==="valida")&&!staged.some(r=>r.estado==="con_errores");
+  const batchRows=(batches||[]).map(b=>'<tr><td>'+esc(b.periodo)+'</td><td>'+esc(b.nombre_archivo||"—")+'</td><td>'+esc(b.estado)+'</td><td>'+Number(b.filas_importadas||0)+' / '+Number(b.filas_leidas||0)+'</td></tr>').join("");
+  const canConsolidate=!!latest&&latest.estado==="pendiente"&&pendingCount>0&&errorCount===0&&stagedCount===Number(latest.filas_leidas||0)&&importedCount===0;
   h.innerHTML=head("Importación mensual","Carga el Excel, revisa las filas y confirma su incorporación al histórico.")
-    +'<div class="notice"><strong>Proceso seguro:</strong> el fichero se guarda primero en preparación. Solo se incorpora al histórico al confirmar la consolidación. Se conservan las columnas originales.</div>'
-    +'<section class="card"><div class="field-grid"><div class="field"><label>Periodo de datos</label><input id="period" type="month" value="'+new Date().toISOString().slice(0,7)+'"></div><div class="field"><label>Archivo Excel</label><input id="file" type="file" accept=".xlsx,.xls,.csv"></div></div><div class="upload-zone"><div class="upload-icon">⇧</div><h3>Selecciona tu fichero mensual</h3><p>Formatos XLSX, XLS y CSV. Se conservarán las columnas originales.</p><div id="file-name" class="muted"></div></div><div class="form-actions"><button id="stage" class="btn primary" disabled>Preparar y validar filas →</button></div><div id="result"></div></section>'
-    +'<div class="grid content-grid"><section class="card"><div class="card-title"><div><h3>Últimas importaciones</h3><p>Histórico de cargas mensuales</p></div></div><div class="table-wrap"><table><thead><tr><th>PERIODO</th><th>ARCHIVO</th><th>ESTADO</th><th>FILAS</th></tr></thead><tbody>'+(batchRows||'<tr><td colspan="4" class="empty-row">Todavía no hay importaciones.</td></tr>')+'</tbody></table></div></section><section class="card"><div class="card-title"><div><h3>Revisión del último lote</h3><p>'+(latest?esc(latest.periodo)+" · "+esc(latest.nombre_archivo||""):"Sin lotes")+'</p></div><span class="pill '+(latest?.estado==="importada"?"green":"")+'">'+(latest?esc(latest.estado):"Pendiente")+'</span></div><div class="status-line"><span>Filas leídas</span><b>'+(latest?.filas_leidas??0)+'</b></div><div class="status-line"><span>Filas incorporadas</span><b>'+(latest?.filas_importadas??0)+'</b></div><div class="status-line"><span>Filas rechazadas</span><b>'+(latest?.filas_rechazadas??0)+'</b></div><button id="confirm-import" class="btn primary full" '+(canConsolidate?"":"disabled")+'>'+(canConsolidate?"Confirmar e incorporar al histórico →":"Lote ya incorporado o requiere corregir errores")+'</button><p class="muted small">La confirmación se ejecuta en una transacción de base de datos y no duplica filas si se repite.</p></section></div>'
-    +'<section class="card"><div class="card-title"><div><h3>Detalle de filas</h3><p>'+(staged.length||0)+' filas del último lote · Expediente corresponde a la columna «Provisión» del Excel</p></div></div><div class="table-wrap"><table><thead><tr><th>FILA</th><th>EXPEDIENTE</th><th>OFICINA</th><th>FECHA ALTA</th><th>FECHA PROTOCOLO</th><th>ENVÍO NOTARIO</th><th>DÍAS EXCEL</th><th>ESTADO</th></tr></thead><tbody>'+(rowHtml||'<tr><td colspan="8" class="empty-row">No hay filas para revisar.</td></tr>')+'</tbody></table></div></section>';
+    +'<div class="notice"><strong>Proceso seguro:</strong> el fichero se prepara primero. Solo se incorpora al histórico al confirmar. La revisión se pagina y no descarga el lote completo en el navegador.</div>'
+    +'<section class="card"><div class="field-grid"><div class="field"><label>Periodo de datos</label><input id="period" type="month" value="'+new Date().toISOString().slice(0,7)+'"></div><div class="field"><label>Archivo Excel</label><input id="file" type="file" accept=".xlsx,.xls,.csv"></div></div><div class="upload-zone"><div class="upload-icon">⇧</div><h3>Selecciona tu fichero mensual</h3><p>Formatos XLSX, XLS y CSV. Se conservarán las columnas originales.</p><div id="file-name" class="muted"></div></div><div class="form-actions"><button id="stage" class="btn primary" disabled>Preparar y validar filas →</button></div><div id="result" aria-live="polite"></div></section>'
+    +'<div class="grid content-grid"><section class="card"><div class="card-title"><div><h3>Últimas importaciones</h3><p>Histórico de cargas mensuales</p></div></div><div class="table-wrap"><table><thead><tr><th>PERIODO</th><th>ARCHIVO</th><th>ESTADO</th><th>FILAS</th></tr></thead><tbody>'+(batchRows||'<tr><td colspan="4" class="empty-row">Todavía no hay importaciones.</td></tr>')+'</tbody></table></div></section><section class="card"><div class="card-title"><div><h3>Revisión del último lote</h3><p>'+(latest?esc(latest.periodo)+" · "+esc(latest.nombre_archivo||""):"Sin lotes")+'</p></div><span class="pill '+(latest?.estado==="importada"?"green":"")+'">'+(latest?esc(latest.estado):"Pendiente")+'</span></div><div class="status-line"><span>Filas leídas</span><b>'+(latest?.filas_leidas??0)+'</b></div><div class="status-line"><span>Filas preparadas</span><b>'+stagedCount+'</b></div><div class="status-line"><span>Filas pendientes de incorporar</span><b>'+pendingCount+'</b></div><div class="status-line"><span>Filas incorporadas</span><b>'+(latest?.filas_importadas??importedCount)+'</b></div><div class="status-line"><span>Filas rechazadas</span><b>'+(latest?.filas_rechazadas??errorCount)+'</b></div><div id="batch-integrity" class="muted small">'+(latest&&stagedCount!==Number(latest.filas_leidas||0)?"Aviso: el número de filas preparadas no coincide con las filas leídas. No se permite consolidar.":latest&&errorCount?"Hay filas con errores. Deben revisarse antes de consolidar.":latest&&latest.estado==="validando"?"La preparación del lote no terminó correctamente.":latest&&latest.estado==="pendiente"?"El lote está preparado. La confirmación solo se habilita cuando todas las filas están presentes y válidas.":"")+'</div><button id="confirm-import" class="btn primary full" '+(canConsolidate?"":"disabled")+'>'+(canConsolidate?"Confirmar e incorporar al histórico →":"Lote no validado para consolidación")+'</button><p class="muted small">Repetir la confirmación del mismo lote no duplica sus filas. Crear una nueva importación del mismo Excel sí genera otro lote.</p></section></div>'
+    +'<section class="card"><div class="card-title"><div><h3>Detalle de filas</h3><p id="review-summary">'+stagedCount+' filas del último lote · Mostrando una página de '+PAGE_SIZE+' como máximo</p></div></div><div class="table-wrap"><table><thead><tr><th>FILA</th><th>EXPEDIENTE</th><th>OFICINA</th><th>FECHA ALTA</th><th>FECHA PROTOCOLO</th><th>ENVÍO NOTARIO</th><th>DÍAS EXCEL</th><th>ESTADO</th></tr></thead><tbody id="review-rows"><tr><td colspan="8" class="empty-row">Cargando página…</td></tr></tbody></table></div><div class="form-actions" style="align-items:center;justify-content:space-between"><button id="review-prev" class="btn secondary" disabled>← Anterior</button><span id="review-page-label" class="muted small">Página 1 de 1</span><button id="review-next" class="btn secondary" disabled>Siguiente →</button></div><div id="review-error" class="notice" hidden></div></section>';
+
+  async function loadReviewPage(nextPage){
+    if(!latest||!stagedCount){$("#review-rows").innerHTML='<tr><td colspan="8" class="empty-row">No hay filas para revisar.</td></tr>';$("#review-summary").textContent="0 filas del último lote";return}
+    reviewPage=Math.max(0,Math.min(nextPage,Math.ceil(stagedCount/PAGE_SIZE)-1));
+    const from=reviewPage*PAGE_SIZE,to=from+PAGE_SIZE-1;
+    const {data,error}=await sb.from("estadisticas_filas_importacion")
+      .select("numero_fila,datos_mapeados,estado,errores,registro_id")
+      .eq("importacion_id",latest.id).order("numero_fila").range(from,to);
+    if(error)throw error;
+    const rows=data||[];
+    const rowHtml=rows.map(r=>{
+      const m=r.datos_mapeados||{};
+      const errs=Array.isArray(r.errores)?r.errores.map(x=>x.mensaje||"").filter(Boolean).join("; "):"";
+      return '<tr><td>'+r.numero_fila+'</td><td><strong>'+esc(m.expediente||"—")+'</strong></td><td>'+esc(m.oficina||"—")+'</td><td>'+esc(m.fecha_alta||"—")+'</td><td>'+esc(m.fecha_protocolo||"—")+'</td><td>'+esc(m.envio_notario||"—")+'</td><td>'+esc(m.dias_excel||"—")+'</td><td><span class="pill '+(r.estado==="importada"?"green":r.estado==="con_errores"?"red":"")+'">'+esc(r.estado)+'</span>'+(errs?'<small>'+esc(errs)+'</small>':"")+'</td></tr>';
+    }).join("");
+    $("#review-rows").innerHTML=rowHtml||'<tr><td colspan="8" class="empty-row">No hay filas para esta página.</td></tr>';
+    const totalPages=Math.max(1,Math.ceil(stagedCount/PAGE_SIZE));
+    $("#review-summary").textContent="Filas "+(from+1)+"–"+Math.min(to+1,stagedCount)+" de "+stagedCount+" · Expediente corresponde a «Provisión» del Excel";
+    $("#review-page-label").textContent="Página "+(reviewPage+1)+" de "+totalPages;
+    $("#review-prev").disabled=reviewPage===0;
+    $("#review-next").disabled=reviewPage>=totalPages-1;
+  }
+  $("#review-prev").onclick=()=>loadReviewPage(reviewPage-1).catch(e=>{$("#review-error").hidden=false;$("#review-error").textContent="No se pudo cargar la página: "+e.message});
+  $("#review-next").onclick=()=>loadReviewPage(reviewPage+1).catch(e=>{$("#review-error").hidden=false;$("#review-error").textContent="No se pudo cargar la página: "+e.message});
+  try{await loadReviewPage(0)}catch(e){$("#review-error").hidden=false;$("#review-error").textContent="No se pudo cargar la primera página: "+e.message;$("#review-rows").innerHTML='<tr><td colspan="8" class="empty-row">Error al cargar las filas. El lote se conserva; puedes volver a intentarlo.</td></tr>'}
+
   const f=$("#file");
   f.onchange=()=>{$("#file-name").textContent=f.files[0]?.name||"";$("#stage").disabled=!f.files[0]};
   $("#stage").onclick=async()=>{
-    let file=f.files[0],period=$("#period").value,b=$("#stage");
+    const file=f.files[0],period=$("#period").value,b=$("#stage");
     if(!file||!period)return;
-    b.disabled=true;b.textContent="Procesando…";
+    b.disabled=true;b.textContent="Leyendo Excel…";
+    let batchId=null,inserted=0;
     try{
-      let wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true}),rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:"",raw:false});
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+      const sheet=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(sheet,{defval:"",raw:false});
       if(!rows.length)throw Error("El Excel no contiene filas.");
       const excelHeaders=Object.keys(rows[0]||{});
       const requiredExcelColumns=[
-        {name:"Provisión",aliases:["Provisión","Provision","Expediente"]},
-        {name:"Oficina",aliases:["Oficina"]},
-        {name:"Fecha Alta",aliases:["Fecha Alta"]},
-        {name:"Contrato",aliases:["Contrato"]},
-        {name:"Tipo Provisión",aliases:["Tipo Provisión","Tipo Provision"]},
-        {name:"Notario",aliases:["Notario"]},
-        {name:"Provincia",aliases:["Provincia"]},
-        {name:"Municipio",aliases:["Municipio"]},
-        {name:"Comunidad",aliases:["Comunidad"]},
-        {name:"Protocolo",aliases:["Protocolo"]},
-        {name:"Fecha Protocolo",aliases:["Fecha Protocolo"]},
-        {name:"V.C.",aliases:["V.C.","VC"]},
-        {name:"Apoderado",aliases:["Apoderado"]},
-        {name:"Envio Notario",aliases:["Envio Notario","Envío Notario"]},
-        {name:"Días",aliases:["Días","Dias"]}
+        {name:"Provisión",aliases:["Provisión","Provision","Expediente"]},{name:"Oficina",aliases:["Oficina"]},
+        {name:"Fecha Alta",aliases:["Fecha Alta"]},{name:"Contrato",aliases:["Contrato"]},
+        {name:"Tipo Provisión",aliases:["Tipo Provisión","Tipo Provision"]},{name:"Notario",aliases:["Notario"]},
+        {name:"Provincia",aliases:["Provincia"]},{name:"Municipio",aliases:["Municipio"]},{name:"Comunidad",aliases:["Comunidad"]},
+        {name:"Protocolo",aliases:["Protocolo"]},{name:"Fecha Protocolo",aliases:["Fecha Protocolo"]},
+        {name:"V.C.",aliases:["V.C.","VC"]},{name:"Apoderado",aliases:["Apoderado"]},
+        {name:"Envio Notario",aliases:["Envio Notario","Envío Notario"]},{name:"Días",aliases:["Días","Dias"]}
       ];
       const normalizedHeaders=excelHeaders.map(norm);
       const missingHeaders=requiredExcelColumns.filter(col=>!col.aliases.some(alias=>normalizedHeaders.includes(norm(alias)))).map(col=>col.name);
       if(missingHeaders.length)throw Error("El Excel no contiene todas las columnas obligatorias. Faltan: "+missingHeaders.join(", ")+". Debe incluir las 15 columnas del modelo mensual.");
-      let {data:batch,error}=await sb.from("estadisticas_importaciones").insert({periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:rows.length,mapeo_columnas:{columnas:excelHeaders,columnas_obligatorias:requiredExcelColumns.map(c=>c.name)}}).select("id").single();
+      const {data:batch,error}=await sb.from("estadisticas_importaciones").insert({
+        periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:rows.length,
+        mapeo_columnas:{columnas:excelHeaders,columnas_obligatorias:requiredExcelColumns.map(c=>c.name)}
+      }).select("id").single();
       if(error)throw error;
-      let stagedRows=rows.map((r,i)=>{let m=mapRow(r),errs=[];if(!m.expediente)errs.push("Falta Expediente");if(!m.oficina)errs.push("Falta Oficina");return{importacion_id:batch.id,numero_fila:i+2,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]}});
-      for(let i=0;i<stagedRows.length;i+=200){let {error}=await sb.from("estadisticas_filas_importacion").insert(stagedRows.slice(i,i+200));if(error)throw error}
-      let bad=stagedRows.filter(x=>x.estado==="con_errores").length;
-      let {error:updateError}=await sb.from("estadisticas_importaciones").update({estado:bad?"importada_con_errores":"pendiente",filas_rechazadas:bad,resumen_validacion:{filas:rows.length,con_errores:bad}}).eq("id",batch.id);
+      batchId=batch.id;
+      const toDbDate=value=>{
+        if(value===null||value===undefined||String(value).trim()==="")return null;
+        if(value instanceof Date&&!Number.isNaN(value.getTime()))return [String(value.getDate()).padStart(2,"0"),String(value.getMonth()+1).padStart(2,"0"),value.getFullYear()].join("-");
+        let s=String(value).trim().split(" ")[0],m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+        if(m){const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);const check=new Date(y,mo-1,d);return check.getFullYear()===y&&check.getMonth()===mo-1&&check.getDate()===d?[String(d).padStart(2,"0"),String(mo).padStart(2,"0"),y].join("-"):null}
+        m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if(m){const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]),check=new Date(y,mo-1,d);return check.getFullYear()===y&&check.getMonth()===mo-1&&check.getDate()===d?[String(d).padStart(2,"0"),String(mo).padStart(2,"0"),y].join("-"):null}
+        return null;
+      };
+      const CHUNK=500;
+      let bad=0;
+      for(let i=0;i<rows.length;i+=CHUNK){
+        const source=rows.slice(i,i+CHUNK);
+        const stagedRows=source.map((r,j)=>{
+          const m=mapRow(r),errs=[];
+          m.fecha_alta=toDbDate(m.fecha_alta);
+          m.fecha_protocolo=toDbDate(m.fecha_protocolo);
+          m.envio_notario=toDbDate(m.envio_notario);
+          if(!m.expediente)errs.push("Falta Expediente");
+          if(!m.oficina)errs.push("Falta Oficina");
+          if(!m.fecha_alta)errs.push("Fecha Alta ausente o no válida (dd-mm-aaaa)");
+          if(!m.fecha_protocolo)errs.push("Fecha Protocolo ausente o no válida (dd-mm-aaaa)");
+          if(!m.envio_notario)errs.push("Envío Notario ausente o no válido (dd-mm-aaaa)");
+          if(m.dias_excel===null||String(m.dias_excel).trim()===""||!Number.isInteger(Number(m.dias_excel)))errs.push("Días ausente o no numérico");
+          else m.dias_excel=String(Number(m.dias_excel));
+          if(errs.length)bad++;
+          return{importacion_id:batchId,numero_fila:i+j+2,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]};
+        });
+        const {error:insertError}=await sb.from("estadisticas_filas_importacion").insert(stagedRows);
+        if(insertError)throw insertError;
+        inserted+=stagedRows.length;
+        b.textContent="Preparando "+inserted.toLocaleString("es-ES")+" / "+rows.length.toLocaleString("es-ES")+" filas…";
+      }
+      const {error:updateError}=await sb.from("estadisticas_importaciones").update({
+        estado:bad?"importada_con_errores":"pendiente",filas_rechazadas:bad,
+        resumen_validacion:{filas:rows.length,preparadas:inserted,con_errores:bad}
+      }).eq("id",batchId);
       if(updateError)throw updateError;
-      msg("Excel preparado para revisión");await render();
-    }catch(e){$("#result").innerHTML='<div class="notice">'+esc(e.message)+'</div>';msg("No se pudo procesar el Excel");b.disabled=false;b.textContent="Preparar y validar filas →"}
+      $("#result").innerHTML='<div class="notice">Preparación finalizada: '+inserted.toLocaleString("es-ES")+' filas preparadas y '+bad.toLocaleString("es-ES")+' con errores. No se ha incorporado nada al histórico.</div>';
+      msg("Excel preparado para revisión");
+      await render();
+    }catch(e){
+      if(batchId){
+        await sb.from("estadisticas_importaciones").update({
+          estado:"error_preparacion",filas_rechazadas:Math.max(0,inserted),
+          resumen_validacion:{filas_preparadas:inserted,error:e.message}
+        }).eq("id",batchId);
+      }
+      $("#result").innerHTML='<div class="notice">La preparación se ha detenido. Filas guardadas en preparación: '+inserted.toLocaleString("es-ES")+'. Detalle: '+esc(e.message)+'. El lote parcial se conserva y no se ha consolidado.</div>';
+      msg("No se pudo completar la preparación");
+      b.disabled=false;b.textContent="Reintentar preparación con otro lote";
+    }
   };
   const confirm=$("#confirm-import");
   if(confirm)confirm.onclick=async()=>{
     confirm.disabled=true;confirm.textContent="Incorporando…";
-    const {data,error}=await sb.rpc("consolidar_importacion",{p_importacion_id:latest.id});
-    if(error){msg(error.message);confirm.disabled=false;confirm.textContent="Reintentar incorporación →";return}
-    msg("Importación completada: "+data.importadas+" expedientes");await render();
+    try{
+      const {data,error}=await sb.rpc("consolidar_importacion",{p_importacion_id:latest.id});
+      if(error)throw error;
+      msg("Importación completada: "+Number(data?.importadas||0).toLocaleString("es-ES")+" expedientes");
+      await render();
+    }catch(e){
+      $("#batch-integrity").textContent="No se ha confirmado la incorporación: "+e.message;
+      confirm.disabled=false;confirm.textContent="Reintentar incorporación →";
+    }
   };
 }
 function norm(s){return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"")}
