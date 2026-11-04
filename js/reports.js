@@ -141,7 +141,7 @@ function actaPreview(c){
  return '<article class="acta-document" style="--acta-primary:'+color(c.primaryColor,"#064675")+';--acta-ink:'+color(c.textColor,"#243746")+';--acta-head:'+color(c.headerColor,"#EAF2F8")+';--acta-font:'+escHtml(c.fontFamily||"Arial")+';--acta-size:'+(Math.max(8,Math.min(16,+c.fontSize||11)))+'px"><header class="acta-doc-header">'+header+'</header><h1>'+escHtml(c.title||"ORDEN DEL DÍA – REUNIÓN")+(c.date?' · '+escHtml(c.date):"")+'</h1>'+
  section("intro","",p(String(c.intro||"").replace(/\[nombre\]/gi,c.location||"[nombre]").replace(/\[dirección\]/gi,c.addressMeeting||"[dirección]")))+
  section("meeting","Datos de la reunión",'<p><strong>Dirección:</strong> '+escHtml(c.addressMeeting)+'</p>'+p(String(c.meetingText||"").replace(/\[hora de inicio\]/gi,c.start||"[hora de inicio]").replace(/\[hora de finalización\]/gi,c.end||"[hora de finalización]")))+
- section("attendees","Asistentes",'<table class="acta-attendee-table"><thead><tr><th>Asistentes</th><th>Cargo</th></tr></thead><tbody>'+rows+'</tbody></table>')+
+ section("attendees","",'<table class="acta-attendee-table"><thead><tr><th>Asistentes</th><th>Cargo</th></tr></thead><tbody>'+rows+'</tbody></table>')+
  section("agenda","Orden del día",p(c.agendaText))+
   (c.showFooter?'<footer class="acta-doc-footer">MOLSAN · Gestión y Tramitación</footer>':"")+'</article>';
 }
