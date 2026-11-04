@@ -552,8 +552,8 @@ async function reglaModal(field,currentRule=null){
   const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
-    $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)});
-    $$("[data-rule-result-mode]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value!=="fixed"});
+    $("[data-rule-operator]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)};s.onchange=sync;sync()});
+    $("[data-rule-result-mode]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value!=="fixed"};s.onchange=sync;sync()});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
     const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
