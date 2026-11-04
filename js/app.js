@@ -70,7 +70,7 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
     +`<div class="dash-section-heading"><div><h2>Actividad de firma</h2><p>Distribución de los expedientes del periodo seleccionado</p></div><span class="pill">${monthRows.length} registros</span></div>`
     +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro de encargo","Distribución por centro solicitante",centroEncargoItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Nombre del apoderado","Distribución por apoderado",apoderadoItems,monthRows.length)}${list("Entidad","Clasificación calculada mediante reglas activas",entidadItems,monthRows.length)}${list("Clasificación por oficina","5316 = Cancela · cualquier otro código = Oficina",oficinaItems,monthRows.length)}</div>`
     +`<section class="card dash-comparison"><div class="card-title"><div><h3>Comparativa mensual</h3><p>${titleMonth} frente a ${titlePrevious}</p></div><span class="pill">${previousRows.length?"Comparación disponible":"Pendiente de histórico"}</span></div><div class="dash-compare-grid"><div><small>${titleMonth}</small><strong>${monthRows.length}</strong><span>Expedientes</span></div><div><small>${titlePrevious}</small><strong>${previousRows.length}</strong><span>Expedientes</span></div><div><small>Diferencia</small><strong class="${delta>0?"positive":delta<0?"negative":""}">${previousRows.length?(delta>0?"+":"")+delta:"—"}</strong><span>${previousRows.length?(delta>0?"Más expedientes":delta<0?"Menos expedientes":"Sin variación"):"No hay datos del mes anterior"}</span></div></div></section>`
-    +`<div class="dash-footnote">El periodo se determina por la fecha de protocolo. Los centros y las oficinas de origen que todavía no estén identificados aparecen como pendientes, sin atribuciones automáticas.</div>`;
+    +`<div class="dash-footnote">El periodo se determina por la fecha de protocolo. Las columnas adicionales se completan exclusivamente mediante reglas configuradas; si no existe una regla aplicable, el valor queda pendiente de clasificar.</div>`;
   $("#dash-refresh").onclick=()=>dashboard(h,month,year);
   $("#dash-month").onchange=e=>dashboard(h,Number(e.target.value),year);
   $("#dash-year").onchange=e=>dashboard(h,month,Number(e.target.value));
@@ -89,7 +89,7 @@ async function expedientes(h){  const columns=[
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
   if(error)throw error;
   const rows=(data||[]).map(r=>"<tr>"+columns.map((c,i)=>"<td>"+(i===0?"<strong>":"")+esc(r[c[0]]??"—")+(i===0?"</strong>":"")+"</td>").join("")+"</tr>").join("");
-  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales y los campos calculados por reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
+  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales y las 7 columnas adicionales calculadas mediante reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
     +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en las columnas originales y calculadas…"><span class="pill">'+(data?.length||0)+' registros recientes · columnas originales + calculadas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="22" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
   $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
@@ -380,7 +380,7 @@ async function campoCalculadoModal(field=null){
       <div class="field full-span"><label for="field-description">Descripción</label><textarea id="field-description" maxlength="1000" placeholder="Qué mide este campo y para qué se utilizará">${esc(field?.descripcion||"")}</textarea></div>
       <div class="field"><label for="field-active">Estado del campo</label><select id="field-active"><option value="true" ${field?.activo!==false?"selected":""}>Activo</option><option value="false" ${field?.activo===false?"selected":""}>Inactivo</option></select></div>
       <div class="field"><label>Versión de regla</label><input value="${activeRule?"v"+activeRule.version+" · nueva versión v"+nextVersion:"Primera versión"}" disabled></div>
-      <div class="field full-span"><label for="field-rule">Definición de regla (JSON)</label><textarea id="field-rule" class="rule-editor" spellcheck="false" placeholder="{&quot;operacion&quot;:&quot;...&quot;,&quot;campos&quot;:[]}">${esc(definition)}</textarea><small class="field-help">La definición se guarda versionada. El motor de evaluación todavía no ejecuta reglas automáticamente; esta configuración documenta la lógica hasta validar y activar su evaluador.</small></div>
+      <div class="field full-span"><label for="field-rule">Definición de regla (JSON)</label><textarea id="field-rule" class="rule-editor" spellcheck="false" placeholder="{&quot;operacion&quot;:&quot;...&quot;,&quot;campos&quot;:[]}">${esc(definition)}</textarea><small class="field-help">La definición se guarda versionada. Las reglas activas se ejecutan al consolidar nuevas importaciones y guardan el resultado junto con su versión.</small></div>
       <div class="field full-span"><label for="field-rule-notes">Notas de la regla</label><textarea id="field-rule-notes" maxlength="2000" placeholder="Origen de los datos, condiciones, excepciones y criterios de validación…">${esc(activeRule?.notas||"")}</textarea></div>
     </div><div class="modal-actions"><button type="button" class="btn secondary" id="field-modal-cancel">Cancelar</button><button type="submit" class="btn primary" id="field-modal-save">${editing?"Guardar cambios":"Crear campo"}</button></div></form>
   </section>`;
@@ -536,7 +536,8 @@ async function reglaModal(field,currentRule=null){
   const current=history?.find(x=>x.activa)||currentRule||history?.[0]||null;
   const definition=current?.definicion||{schema:1,logica:"OR",condiciones:[],por_defecto:""};
   const fixedTargets=ruleTargetFields.map(([code,label])=>'<option value="registro:'+code+'">'+esc(label)+' · columna de expediente</option>').join("");
-  const calculatedTargets=(calculatedFields||[]).map(x=>'<option value="calculado:'+x.id+'">'+esc(x.nombre)+' · campo calculado</option>').join("");
+  const fixedCodes=new Set(ruleTargetFields.map(x=>x[0]));
+  const calculatedTargets=(calculatedFields||[]).filter(x=>!fixedCodes.has(x.codigo)).map(x=>'<option value="calculado:'+x.id+'">'+esc(x.nombre)+' · campo calculado</option>').join("");
   const defaultTarget=ruleTargetFields.some(x=>x[0]===field.codigo)?"registro:"+field.codigo:"calculado:"+field.id;
   const targetValue=definition.destino?.tipo==="registro"?"registro:"+definition.destino.campo:definition.destino?.tipo==="calculado"?"calculado:"+definition.destino.campo_id:defaultTarget;
   const modal=document.createElement("div");modal.id="rules-modal";modal.className="modal-backdrop";
@@ -564,10 +565,16 @@ async function reglaModal(field,currentRule=null){
     if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||(!c.resultado&&c.resultado!=="$origen")||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
     const now=new Date().toISOString();
     try{
-      const version=(history||[]).reduce((m,r)=>Math.max(m,r.version||0),0)+1;
-      const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version,prioridad:d.prioridad,definicion:d,activa:false,motor:"expresion_v1",notas:"Regla configurada desde el módulo Reglas de negocio."}).select("id").single();
+      const [destinationType,destinationId]=($("#rule-target").value||"").split(":");
+      const destinationFieldId=destinationType==="registro"?(calculatedFields||[]).find(x=>x.codigo===destinationId)?.id:null;
+      const targetFieldId=destinationType==="calculado"?destinationId:destinationFieldId;
+      if(!targetFieldId)throw new Error("No se ha encontrado el campo asociado al destino seleccionado.");
+      const {data:targetHistory,error:targetHistoryError}=await sb.from("estadisticas_reglas_calculo").select("version").eq("campo_id",targetFieldId);
+      if(targetHistoryError)throw targetHistoryError;
+      const version=(targetHistory||[]).reduce((m,r)=>Math.max(m,r.version||0),0)+1;
+      const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:targetFieldId,version,prioridad:d.prioridad,definicion:d,activa:false,motor:"expresion_v1",notas:"Regla configurada desde el módulo Reglas de negocio."}).select("id").single();
       if(insertError)throw insertError;
-      const {error:deactivateError}=await sb.from("estadisticas_reglas_calculo").update({activa:false,vigente_hasta:now}).eq("campo_id",field.id).eq("activa",true);
+      const {error:deactivateError}=await sb.from("estadisticas_reglas_calculo").update({activa:false,vigente_hasta:now}).eq("campo_id",targetFieldId).eq("activa",true);
       if(deactivateError)throw deactivateError;
       const {error:activateError}=await sb.from("estadisticas_reglas_calculo").update({activa:true,vigente_desde:now,vigente_hasta:null}).eq("id",newRule.id);
       if(activateError)throw activateError;
