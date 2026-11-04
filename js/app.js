@@ -202,7 +202,7 @@ async function importacion(h){
     const file=f.files[0],period=$("#period").value,b=$("#stage");
     if(!file||!period)return;
     b.disabled=true;b.textContent="Leyendo Excel…";
-    let batchId=null,inserted=0;
+    let batchId=null,inserted=0,validationErrors=0;
     try{
       const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
       const sheet=wb.Sheets[wb.SheetNames[0]];
@@ -255,6 +255,7 @@ async function importacion(h){
           if(errs.length)bad++;
           return{importacion_id:batchId,numero_fila:i+j+2,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]};
         });
+        validationErrors=bad;
         const {error:insertError}=await sb.from("estadisticas_filas_importacion").insert(stagedRows);
         if(insertError)throw insertError;
         inserted+=stagedRows.length;
@@ -271,8 +272,8 @@ async function importacion(h){
     }catch(e){
       if(batchId){
         await sb.from("estadisticas_importaciones").update({
-          estado:"error_preparacion",filas_rechazadas:Math.max(0,inserted),
-          resumen_validacion:{filas_preparadas:inserted,error:e.message}
+          estado:"error_preparacion",filas_rechazadas:validationErrors,
+          resumen_validacion:{filas_preparadas:inserted,filas_con_errores:validationErrors,error:e.message}
         }).eq("id",batchId);
       }
       $("#result").innerHTML='<div class="notice">La preparación se ha detenido. Filas guardadas en preparación: '+inserted.toLocaleString("es-ES")+'. Detalle: '+esc(e.message)+'. El lote parcial se conserva y no se ha consolidado.</div>';
