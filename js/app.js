@@ -207,9 +207,11 @@ async function importacion(h){
     try{
       const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
       const sheet=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(sheet,{defval:"",raw:false});
-      if(!rows.length)throw Error("El Excel no contiene filas.");
-      const excelHeaders=Object.keys(rows[0]||{});
+      if(!sheet||!sheet["!ref"])throw Error("La primera hoja del Excel está vacía.");
+      const bounds=XLSX.utils.decode_range(sheet["!ref"]);
+      const headerRow=bounds.s.r;
+      const headerValues=XLSX.utils.sheet_to_json(sheet,{header:1,range:{s:{r:headerRow,c:bounds.s.c},e:{r:headerRow,c:bounds.e.c}},defval:"",raw:false,blankrows:true})[0]||[];
+      const excelHeaders=headerValues.map((v,i)=>String(v??"").trim()||("COLUMNA_"+(i+1)));
       const requiredExcelColumns=[
         {name:"Provisión",aliases:["Provisión","Provision","Expediente"]},{name:"Oficina",aliases:["Oficina"]},
         {name:"Fecha Alta",aliases:["Fecha Alta"]},{name:"Contrato",aliases:["Contrato"]},
@@ -222,26 +224,32 @@ async function importacion(h){
       const normalizedHeaders=excelHeaders.map(norm);
       const missingHeaders=requiredExcelColumns.filter(col=>!col.aliases.some(alias=>normalizedHeaders.includes(norm(alias)))).map(col=>col.name);
       if(missingHeaders.length)throw Error("El Excel no contiene todas las columnas obligatorias. Faltan: "+missingHeaders.join(", ")+". Debe incluir las 15 columnas del modelo mensual.");
-      const {data:batch,error}=await sb.from("estadisticas_importaciones").insert({
-        periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:rows.length,
+      if(bounds.e.r<=headerRow)throw Error("El Excel no contiene filas de datos.");
+      const {data:batch,error:batchCreateError}=await sb.from("estadisticas_importaciones").insert({
+        periodo:period+"-01",nombre_archivo:file.name,estado:"validando",filas_leidas:0,
         mapeo_columnas:{columnas:excelHeaders,columnas_obligatorias:requiredExcelColumns.map(c=>c.name)}
       }).select("id").single();
-      if(error)throw error;
+      if(batchCreateError)throw batchCreateError;
       batchId=batch.id;
       const toDbDate=value=>{
         if(value===null||value===undefined||String(value).trim()==="")return null;
         if(value instanceof Date&&!Number.isNaN(value.getTime()))return [String(value.getDate()).padStart(2,"0"),String(value.getMonth()+1).padStart(2,"0"),value.getFullYear()].join("-");
         let s=String(value).trim().split(" ")[0],m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
-        if(m){const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);const check=new Date(y,mo-1,d);return check.getFullYear()===y&&check.getMonth()===mo-1&&check.getDate()===d?[String(d).padStart(2,"0"),String(mo).padStart(2,"0"),y].join("-"):null}
+        if(m){const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]),check=new Date(y,mo-1,d);return check.getFullYear()===y&&check.getMonth()===mo-1&&check.getDate()===d?[String(d).padStart(2,"0"),String(mo).padStart(2,"0"),y].join("-"):null}
         m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
         if(m){const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]),check=new Date(y,mo-1,d);return check.getFullYear()===y&&check.getMonth()===mo-1&&check.getDate()===d?[String(d).padStart(2,"0"),String(mo).padStart(2,"0"),y].join("-"):null}
         return null;
       };
-      const CHUNK=500;
+      const CHUNK=500,totalSheetRows=bounds.e.r-headerRow;
       let bad=0;
-      for(let i=0;i<rows.length;i+=CHUNK){
-        const source=rows.slice(i,i+CHUNK);
-        const stagedRows=source.map((r,j)=>{
+      for(let startRow=headerRow+1;startRow<=bounds.e.r;startRow+=CHUNK){
+        const endRow=Math.min(startRow+CHUNK-1,bounds.e.r);
+        const values=XLSX.utils.sheet_to_json(sheet,{header:1,range:{s:{r:startRow,c:bounds.s.c},e:{r:endRow,c:bounds.e.c}},defval:"",raw:false,blankrows:true});
+        const stagedRows=[];
+        for(let j=0;j<values.length;j++){
+          const cells=values[j]||[];
+          if(!cells.some(v=>String(v??"").trim()!==""))continue;
+          const r={};excelHeaders.forEach((header,index)=>r[header]=cells[index]??"");
           const m=mapRow(r),errs=[];
           m.fecha_alta=toDbDate(m.fecha_alta);
           m.fecha_protocolo=toDbDate(m.fecha_protocolo);
@@ -254,16 +262,19 @@ async function importacion(h){
           if(m.dias_excel===null||String(m.dias_excel).trim()===""||!Number.isInteger(Number(m.dias_excel)))errs.push("Días ausente o no numérico");
           else m.dias_excel=String(Number(m.dias_excel));
           if(errs.length)bad++;
-          return{importacion_id:batchId,numero_fila:i+j+2,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]};
-        });
-        validationErrors=bad;
-        const {error:insertError}=await sb.from("estadisticas_filas_importacion").insert(stagedRows);
-        if(insertError)throw insertError;
-        inserted+=stagedRows.length;
-        b.textContent="Preparando "+inserted.toLocaleString("es-ES")+" / "+rows.length.toLocaleString("es-ES")+" filas…";
+          stagedRows.push({importacion_id:batchId,numero_fila:startRow+j+1,datos_originales:r,datos_mapeados:m,estado:errs.length?"con_errores":"pendiente",errores:errs.map(mensaje=>({mensaje})),advertencias:[]});
+        }
+        if(stagedRows.length){
+          validationErrors=bad;
+          const {error:insertError}=await sb.from("estadisticas_filas_importacion").insert(stagedRows);
+          if(insertError)throw insertError;
+          inserted+=stagedRows.length;
+        }
+        b.textContent="Preparando "+inserted.toLocaleString("es-ES")+" filas · tramo "+Math.min(endRow-headerRow,totalSheetRows).toLocaleString("es-ES")+" / "+totalSheetRows.toLocaleString("es-ES")+"…";
       }
+      if(!inserted)throw Error("No se han encontrado filas de datos no vacías en el Excel.");
       const {error:updateError}=await sb.from("estadisticas_importaciones").update({
-        estado:bad?"importada_con_errores":"pendiente",filas_rechazadas:bad,
+        estado:bad?"importada_con_errores":"pendiente",filas_leidas:inserted,filas_rechazadas:bad,
         resumen_validacion:{filas:rows.length,preparadas:inserted,con_errores:bad}
       }).eq("id",batchId);
       if(updateError)throw updateError;
