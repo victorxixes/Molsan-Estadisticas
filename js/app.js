@@ -415,7 +415,7 @@ async function campos(h){
   const {data:rules,error:rulesError}=await sb.from("estadisticas_reglas_calculo").select("campo_id,version,activa");if(rulesError)throw rulesError;
   const ruleMap=new Map();(rules||[]).forEach(r=>{const old=ruleMap.get(r.campo_id)||{version:0,active:false};old.version=Math.max(old.version,r.version);old.active=old.active||r.activa;ruleMap.set(r.campo_id,old)});
   h.innerHTML=head("Campos calculados","Define métricas adicionales, documenta sus reglas y conserva su histórico de versiones.")
-  +`<div class="notice">Las definiciones y versiones se guardan en PostgreSQL. Las reglas activas se ejecutan automáticamente al incorporar cada expediente y el resultado queda vinculado a la versión exacta de la regla. Los históricos anteriores no se recalculan al cambiar una regla.</div>
+  +`<div class="notice">Las reglas activas se evalúan durante la consolidación del Excel. Cada resultado conserva el campo de destino, la regla y su versión; los históricos anteriores no se recalculan al cambiar una regla.</div>
   <section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos · ${data.filter(x=>x.activo).length} activos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div>
   <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>REGLA</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>{const r=ruleMap.get(x.id);return `<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${r?"v"+r.version+(r.active?" · Activa":" · Inactiva"):"Sin regla"}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><button class="btn secondary small" data-edit-field="${x.id}">Editar</button></td></tr>`}).join(""):'<tr><td colspan="7" class="empty-row">Todavía no hay campos calculados. Crea el primero.</td></tr>'}</tbody></table></div></section>`;
   $("#new-field").onclick=()=>campoCalculadoModal();
@@ -429,8 +429,12 @@ const ruleSourceFields=[
   ["envio_notario","Envío notario"],["dias_excel","Días"],["centro","Centro"],["circuito","Circuito"],
   ["tipo_firma","Tipo de firma"],["oficina_origen","Oficina de origen"],["tipo_gestion","Tipo de gestión"]
 ];
+const ruleTargetFields=[
+  ["tipo_entidad","Tipo de entidad"],["tipo_gestion","Tipo de gestión"],["centro","Centro"],
+  ["circuito","Circuito"],["tipo_firma","Tipo de firma"],["oficina_origen","Oficina de origen"]
+];
 function defaultEntityRule(){
-  return {schema:1,logica:"OR",condiciones:[
+  return {schema:1,logica:"AND",destino:{tipo:"registro",campo:"tipo_entidad"},condiciones:[
     {campo:"contrato",operador:"in",valores:["9272","9320","9620"],resultado:"Caixabank"},
     {campo:"apoderado",operador:"in",valores:["Colaboradores","Molsan"],resultado:"Caixabank"}
   ],por_defecto:"Otra entidad"};
@@ -465,7 +469,7 @@ async function ensureEntityRule(){
   const {data:rules,error:ruleError}=await sb.from("estadisticas_reglas_calculo").select("id").eq("campo_id",field.id).limit(1);
   if(ruleError)throw ruleError;
   if(!rules?.length){
-    const {error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version:1,definicion:defaultEntityRule(),activa:true,motor:"expresion_v1",notas:"Regla inicial acordada: contrato 9272, 9320 o 9620; o apoderado Colaboradores o Molsan = Caixabank. Resto = Otra entidad."});
+    const {error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version:1,definicion:defaultEntityRule(),activa:true,motor:"expresion_v1",notas:"Regla inicial acordada: contrato 9272, 9320 o 9620 Y apoderado Colaboradores o Molsan = Caixabank. Resto = Otra entidad."});
     if(insertError)throw insertError;
   }
   return field;
@@ -508,17 +512,27 @@ function collectRuleDefinition(){
     const values=op==="empty"||op==="not_empty"?[]:(op==="in"?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
     return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:row.querySelector("[data-rule-result]").value.trim()};
   });
-  return {schema:1,logica:$("#rule-logic").value,condiciones:conditions,por_defecto:$("#rule-default").value.trim()};
+  const [targetType,targetId]=($("#rule-target").value||"").split(":");
+  const destino=targetType==="registro"?{tipo:"registro",campo:targetId}:{tipo:"calculado",campo_id:targetId};
+  return {schema:1,logica:$("#rule-logic").value,destino,prioridad:Number($("#rule-priority").value)||100,condiciones:conditions,por_defecto:$("#rule-default").value.trim()};
 }
 async function reglaModal(field,currentRule=null){
   if(!field)return;
   const {data:history,error}=await sb.from("estadisticas_reglas_calculo").select("*").eq("campo_id",field.id).order("version",{ascending:false});
   if(error)throw error;
+  const {data:calculatedFields,error:fieldsError}=await sb.from("estadisticas_campos_calculados").select("id,codigo,nombre").eq("activo",true).order("orden").order("nombre");
+  if(fieldsError)throw fieldsError;
   const current=history?.find(x=>x.activa)||currentRule||history?.[0]||null;
   const definition=current?.definicion||{schema:1,logica:"OR",condiciones:[],por_defecto:""};
+  const fixedTargets=ruleTargetFields.map(([code,label])=>'<option value="registro:'+code+'">'+esc(label)+' · columna de expediente</option>').join("");
+  const calculatedTargets=(calculatedFields||[]).map(x=>'<option value="calculado:'+x.id+'">'+esc(x.nombre)+' · campo calculado</option>').join("");
+  const defaultTarget=ruleTargetFields.some(x=>x[0]===field.codigo)?"registro:"+field.codigo:"calculado:"+field.id;
+  const targetValue=definition.destino?.tipo==="registro"?"registro:"+definition.destino.campo:definition.destino?.tipo==="calculado"?"calculado:"+definition.destino.campo_id:defaultTarget;
   const modal=document.createElement("div");modal.id="rules-modal";modal.className="modal-backdrop";
-  modal.innerHTML='<section class="modal-card rules-modal-card" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title"><div class="modal-head"><div><span class="eyebrow">MOTOR DE REGLAS · '+esc(field.codigo)+'</span><h2 id="rules-modal-title">'+esc(field.nombre)+'</h2><p>Define las condiciones y el resultado de cada clasificación.</p></div><button type="button" class="modal-close" id="rules-close" aria-label="Cerrar">×</button></div><form id="rules-form"><div class="field-grid"><div class="field"><label for="rule-logic">Aplicar condiciones con</label><select id="rule-logic"><option value="OR" '+(definition.logica!=="AND"?"selected":"")+'>Cualquiera (O)</option><option value="AND" '+(definition.logica==="AND"?"selected":"")+'>Todas (Y)</option></select></div><div class="field"><label for="rule-default">Resultado si ninguna coincide</label><input id="rule-default" maxlength="180" value="'+esc(definition.por_defecto||"")+'" placeholder="Ej. Otra entidad"></div></div><div class="rule-editor-heading"><div><h3>Condiciones</h3><p>Se evalúan según el operador Y / O seleccionado.</p></div><button type="button" class="btn secondary small" id="rule-add-condition">＋ Añadir condición</button></div><div id="rule-condition-list">'+(definition.condiciones||[]).map((c,i)=>ruleConditionRow(c,i)).join("")+'</div><div id="rule-modal-preview" class="rule-preview-inline"></div><div class="modal-actions"><span class="muted small">Nueva versión: v'+((history?.reduce((m,r)=>Math.max(m,r.version||0),0)||0)+1)+'</span><button type="button" class="btn secondary" id="rule-test">Probar antes de guardar</button><button type="button" class="btn secondary" id="rules-cancel">Cancelar</button><button type="submit" class="btn primary" id="rules-save">Guardar y activar versión</button></div></form></section>';
+  modal.innerHTML='<section class="modal-card rules-modal-card" role="dialog" aria-modal="true" aria-labelledby="rules-modal-title"><div class="modal-head"><div><span class="eyebrow">MOTOR DE REGLAS · '+esc(field.codigo)+'</span><h2 id="rules-modal-title">'+esc(field.nombre)+'</h2><p>Elige dónde se guardará el resultado y define las condiciones que lo generan.</p></div><button type="button" class="modal-close" id="rules-close" aria-label="Cerrar">×</button></div><form id="rules-form"><div class="field-grid"><div class="field full-span"><label for="rule-target">Columna de destino del resultado *</label><select id="rule-target" required>'+fixedTargets+calculatedTargets+'</select><small class="field-help">Las columnas de expediente actualizan el registro. Los campos calculados guardan el resultado con trazabilidad de regla y versión.</small></div><div class="field"><label for="rule-logic">Aplicar condiciones con</label><select id="rule-logic"><option value="OR" '+(definition.logica!=="AND"?"selected":"")+'>Cualquiera (O)</option><option value="AND" '+(definition.logica==="AND"?"selected":"")+'>Todas (Y)</option></select></div><div class="field"><label for="rule-default">Resultado si ninguna coincide</label><input id="rule-default" maxlength="180" value="'+esc(definition.por_defecto||"")+'" placeholder="Ej. Otra entidad"></div><div class="field"><label for="rule-priority">Prioridad</label><input id="rule-priority" type="number" min="1" max="9999" value="'+Number(current?.prioridad||definition.prioridad||100)+'"><small class="field-help">Si varias reglas escriben en el mismo destino, la prioridad menor se aplica primero.</small></div></div><div class="rule-editor-heading"><div><h3>Condiciones</h3><p>Se evalúan según el operador Y / O seleccionado.</p></div><button type="button" class="btn secondary small" id="rule-add-condition">＋ Añadir condición</button></div><div id="rule-condition-list">'+(definition.condiciones||[]).map((c,i)=>ruleConditionRow(c,i)).join("")+'</div><div id="rule-modal-preview" class="rule-preview-inline"></div><div class="modal-actions"><span class="muted small">Nueva versión: v'+((history?.reduce((m,r)=>Math.max(m,r.version||0),0)||0)+1)+'</span><button type="button" class="btn secondary" id="rule-test">Probar antes de guardar</button><button type="button" class="btn secondary" id="rules-cancel">Cancelar</button><button type="submit" class="btn primary" id="rules-save">Guardar y activar versión</button></div></form></section>';
+  $("#rule-target").value=targetValue;
   document.body.append(modal);
+  $("#rule-target").value=targetValue;
   const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
@@ -535,11 +549,12 @@ async function reglaModal(field,currentRule=null){
   $("#rules-form").onsubmit=async e=>{
     e.preventDefault();const save=$("#rules-save");save.disabled=true;save.textContent="Guardando…";
     const d=collectRuleDefinition();
+    if(!d.destino.campo&&!d.destino.campo_id){msg("Selecciona una columna de destino.");save.disabled=false;save.textContent="Guardar y activar versión";return}
     if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||!c.resultado||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
     const now=new Date().toISOString();
     try{
       const version=(history||[]).reduce((m,r)=>Math.max(m,r.version||0),0)+1;
-      const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version,definicion:d,activa:false,motor:"expresion_v1",notas:"Regla configurada desde el módulo Reglas de negocio."}).select("id").single();
+      const {data:newRule,error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version,prioridad:d.prioridad,definicion:d,activa:false,motor:"expresion_v1",notas:"Regla configurada desde el módulo Reglas de negocio."}).select("id").single();
       if(insertError)throw insertError;
       const {error:deactivateError}=await sb.from("estadisticas_reglas_calculo").update({activa:false,vigente_hasta:now}).eq("campo_id",field.id).eq("activa",true);
       if(deactivateError)throw deactivateError;
