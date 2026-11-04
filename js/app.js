@@ -456,8 +456,8 @@ const ruleTargetFields=[
 ];
 function defaultEntityRule(){
   return {schema:1,logica:"AND",destino:{tipo:"registro",campo:"entidad"},condiciones:[
-    {campo:"contrato",operador:"in",valores:["9272","9320","9620"],resultado:"Caixabank"},
-    {campo:"apoderado",operador:"in",valores:["Colaboradores","Molsan"],resultado:"Caixabank"}
+    {campo:"contrato",operador:"starts_with",valores:["9272","9320","9620"],resultado:"Caixabank"},
+    {campo:"apoderado",operador:"in",valores:["Yolanda Vives Solsona","Pedro Pérez Sola","ALBERTO LOPEZ RODRIGUEZ","GASTON BEGUIRISTAIN AMORIN","Carlos Barbera García","Ferran Badia Caralps","Ana Cartagena Puerta","Víctor Tomás Castellsagué","GESTCANARIAS","GESGALICIA","YARZA GESTION","JULIO CUESTA","CASTILLO 11","GESTORIA MAS"],resultado:"Caixabank"}
   ],por_defecto:"Otra entidad"};
 }
 function ruleConditionMatches(record,c){
@@ -465,6 +465,8 @@ function ruleConditionMatches(record,c){
   if(c.operador==="empty")return !value;
   if(c.operador==="not_empty")return !!value;
   if(c.operador==="in")return values.includes(value);
+  if(c.operador==="starts_with")return values.some(v=>v&&value.startsWith(v));
+  if(c.operador==="lookup_notary_circuit")return !!record?.__lookup_circuito_notarial;
   if(c.operador==="equals")return value===values[0];
   if(c.operador==="not_equals")return value!==values[0];
   if(c.operador==="contains")return values[0]?value.includes(values[0]):false;
@@ -477,7 +479,7 @@ function evaluateRuleDefinition(record,definition){
   if(!conditions.length)return definition?.por_defecto??null;
   const matches=conditions.filter(c=>ruleConditionMatches(record,c));
   const passed=definition.logica==="AND"?matches.length===conditions.length:matches.length>0;
-  return passed?(matches[0]?.resultado==="$origen"?String(record?.[matches[0]?.campo]??""):(matches[0]?.resultado??definition.por_defecto??null)):(definition.por_defecto??null);
+  return passed?(matches[0]?.resultado==="$origen"?String(record?.[matches[0]?.campo]??""):matches[0]?.resultado==="$lookup_circuito_notarial"?(record?.__lookup_circuito_notarial??definition.por_defecto??null):(matches[0]?.resultado??definition.por_defecto??null)):(definition.por_defecto??null);
 }
 async function ensureEntityRule(){
   const {data:fields,error}=await sb.from("estadisticas_campos_calculados").select("*").eq("codigo","entidad").limit(1);
@@ -512,7 +514,7 @@ async function reglas(h){
   });
 }
 function ruleConditionRow(condition,index){
-  const operators=[["in","Es uno de"],["equals","Es igual a"],["not_equals","Es distinto de"],["contains","Contiene"],["empty","Está vacío"],["not_empty","No está vacío"],["greater_than","Mayor que"],["less_than","Menor que"]];
+  const operators=[["in","Es uno de"],["starts_with","Empieza por"],["lookup_notary_circuit","Buscar circuito en catálogo notarial"],["equals","Es igual a"],["not_equals","Es distinto de"],["contains","Contiene"],["empty","Está vacío"],["not_empty","No está vacío"],["greater_than","Mayor que"],["less_than","Menor que"]];
   const fields=ruleSourceFields.map(f=>'<option value="'+f[0]+'" '+(condition.campo===f[0]?"selected":"")+'>'+f[1]+'</option>').join("");
   const ops=operators.map(o=>'<option value="'+o[0]+'" '+((condition.operador||"in")===o[0]?"selected":"")+'>'+o[1]+'</option>').join("");
   const sourceMode=condition.resultado==="$origen";
@@ -522,7 +524,7 @@ function collectRuleDefinition(){
   const conditions=$$(".rule-condition").map(row=>{
     const op=row.querySelector("[data-rule-operator]").value;
     const raw=row.querySelector("[data-rule-values]").value.trim();
-    const values=op==="empty"||op==="not_empty"?[]:(op==="in"?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
+    const values=["empty","not_empty","lookup_notary_circuit"].includes(op)?[]:(["in","starts_with"].includes(op)?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
     const mode=row.querySelector("[data-rule-result-mode]")?.value||"fixed";
     return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:mode==="source"?"$origen":row.querySelector("[data-rule-result]").value.trim()};
   });
@@ -550,7 +552,7 @@ async function reglaModal(field,currentRule=null){
   const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
-    $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty"].includes(s.value)});
+    $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)});
     $$("[data-rule-result-mode]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value==="source"});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
@@ -565,7 +567,7 @@ async function reglaModal(field,currentRule=null){
     e.preventDefault();const save=$("#rules-save");save.disabled=true;save.textContent="Guardando…";
     const d=collectRuleDefinition();
     if(!d.destino.campo&&!d.destino.campo_id){msg("Selecciona una columna de destino.");save.disabled=false;save.textContent="Guardar y activar versión";return}
-    if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||(!c.resultado&&c.resultado!=="$origen")||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
+    if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||(!c.resultado&&c.resultado!=="$origen"&&c.resultado!=="$lookup_circuito_notarial")||(!["empty","not_empty","lookup_notary_circuit"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
     const now=new Date().toISOString();
     try{
       const [destinationType,destinationId]=($("#rule-target").value||"").split(":");
@@ -590,6 +592,12 @@ async function previewRule(field,definition,target){
   const {data,error}=await sb.from("estadisticas_registros").select("id,"+columns).limit(5000);
   if(error)throw error;
   const rows=data||[],counts={};
+  if((definition.condiciones||[]).some(c=>c.operador==="lookup_notary_circuit")){
+    let notaries=[],from=0;
+    while(true){const q=await sb.from("ctn_notarios").select("nombre,apellidos,provincia").range(from,from+999);if(q.error)throw q.error;notaries=notaries.concat(q.data||[]);if(!q.data||q.data.length<1000)break;from+=1000}
+    const circuits=new Map(notaries.map(n=>[norm([n.nombre,n.apellidos].filter(Boolean).join(" ")),["las palmas de gran canaria","santa cruz de tenerife"].includes(norm(n.provincia))?"Canarias":"Península"]));
+    rows.forEach(r=>{r.__lookup_circuito_notarial=circuits.get(norm(r.notario))||null});
+  }
   const results=rows.map(r=>{const value=evaluateRuleDefinition(r,definition);const label=String(value??"Sin resultado");counts[label]=(counts[label]||0)+1;return {...r,_rule_value:label}});
   const samples=results.slice(0,8).map(r=>'<tr><td>'+esc(r.expediente||"—")+'</td><td>'+esc(r.contrato||"—")+'</td><td>'+esc(r.apoderado||"—")+'</td><td><strong>'+esc(r._rule_value)+'</strong></td></tr>').join("");
   const destinationLabel=definition.destino?.tipo==="registro"?(ruleTargetFields.find(x=>x[0]===definition.destino.campo)?.[1]||definition.destino.campo):"Campo calculado";
