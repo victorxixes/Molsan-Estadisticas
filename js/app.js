@@ -340,7 +340,7 @@ async function catalogosView(h){
     <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>ALIAS EXCEL</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>`<tr><td>${esc(x.codigo||"—")}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc((x.alias_excel||[]).join(", ")||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-custom-edit="${x.id}">Editar</button><button class="btn danger small" data-custom-delete="${x.id}">Eliminar</button></div></td></tr>`).join(""):'<tr><td colspan="5" class="empty-row">Este catálogo está vacío. Crea el primer valor.</td></tr>'}</tbody></table></div>
     <p class="muted small catalog-footnote">Las categorías personalizadas quedan guardadas en Supabase y preparadas para incorporarse a los campos de importación, expedientes e informes mediante su configuración de correspondencias.</p></section></div>`;
     $$("[data-back-catalogs]").forEach(b=>b.onclick=()=>{customCatalogId=null;catalogosView($("#view-container"))});
-    $("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
+    $$("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
     $$("[data-custom-catalog-edit]").forEach(b=>b.onclick=()=>customCatalogModal((customs||[]).find(x=>x.id===b.dataset.customCatalogEdit)));
     $$("[data-custom-catalog-delete]").forEach(b=>b.onclick=async()=>{try{await deleteCustomCatalog((customs||[]).find(x=>x.id===b.dataset.customCatalogDelete))}catch(e){msg("No se pudo eliminar: "+e.message)}});
     $("#add-custom-catalog-side").onclick=()=>customCatalogModal();$("#edit-custom-catalog").onclick=()=>customCatalogModal(selectedCustom);$("#delete-custom-catalog").onclick=async()=>{try{await deleteCustomCatalog(selectedCustom)}catch(e){msg(e.message)}};
@@ -359,7 +359,7 @@ async function catalogosView(h){
   $$("[data-base-cat-edit]").forEach(b=>b.onclick=()=>baseCatalogModal(activeConfigs.find(x=>x.id===b.dataset.baseCatEdit)));
   $$("[data-base-cat-delete]").forEach(b=>b.onclick=async()=>{const row=activeConfigs.find(x=>x.id===b.dataset.baseCatDelete);if(!row)return;if(!confirm("Se ocultará el catálogo \""+row.nombre+"\" de la lista. Sus valores y referencias históricas se conservarán. ¿Continuar?"))return;try{const {error}=await sb.from("estadisticas_catalogos_configuracion").update({activo:false,actualizado_en:new Date().toISOString()}).eq("id",row.id);if(error)throw error;if(catalog===row.clave)catalog=(activeConfigs.find(x=>x.activo&&x.id!==row.id)?.clave)||"estadisticas_apoderados";msg("Catálogo ocultado; se conserva el histórico");await catalogosView($("#view-container"))}catch(err){msg("No se pudo ocultar: "+err.message)}});
 
-  $("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
+  $$("[data-custom-cat]").forEach(b=>b.onclick=()=>{customCatalogId=b.dataset.customCat;catalogosView($("#view-container"))});
   $("#add-custom-catalog").onclick=()=>customCatalogModal();$("#add-custom-catalog-side").onclick=()=>customCatalogModal();
   $("#add-cat").onclick=()=>catalogModal();
   $$("[data-edit]").forEach(b=>b.onclick=()=>catalogModal(data.find(x=>x.id===b.dataset.edit)));
