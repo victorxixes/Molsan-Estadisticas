@@ -76,21 +76,24 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
   $("#dash-year").onchange=e=>dashboard(h,month,Number(e.target.value));
   wire();
 }
-async function expedientes(h){  const columns=[
-    ["expediente","EXPEDIENTE"],["oficina","OFICINA"],["fecha_alta","FECHA ALTA"],
+async function expedientes(h){  const originalColumns=[
+    ["expediente","PROVISIÓN / EXPEDIENTE"],["oficina","OFICINA"],["fecha_alta","FECHA ALTA"],
     ["contrato","CONTRATO"],["tipo_provision","TIPO PROVISIÓN"],["notario","NOTARIO"],
     ["provincia","PROVINCIA"],["municipio","MUNICIPIO"],["comunidad","COMUNIDAD"],
     ["protocolo","PROTOCOLO"],["fecha_protocolo","FECHA PROTOCOLO"],["vc","V.C."],
-    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"],
+    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"]
+  ];
+  const calculatedColumns=[
     ["centro_encargo","CENTRO DE ENCARGO"],["tipo_gestion","TIPO GESTIÓN"],["nombre_apoderado","NOMBRE DEL APODERADO"],
     ["centro_firma","CENTRO QUE FIRMA"],["entidad","ENTIDAD"],["circuito_notarial","CIRCUITO NOTARIAL"],["tipo_firma","TIPO DE FIRMA"]
   ];
+  const columns=[...originalColumns,...calculatedColumns];
   const select=columns.map(c=>c[0]).join(",");
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
   if(error)throw error;
   const rows=(data||[]).map(r=>"<tr>"+columns.map((c,i)=>"<td>"+(i===0?"<strong>":"")+esc(r[c[0]]??"—")+(i===0?"</strong>":"")+"</td>").join("")+"</tr>").join("");
-  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales y las 7 columnas adicionales calculadas mediante reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
-    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en las columnas originales y calculadas…"><span class="pill">'+(data?.length||0)+' registros recientes · columnas originales + calculadas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="22" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
+  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales del Excel y las 7 columnas adicionales generadas por reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
+    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en cualquiera de las 22 columnas…"><span class="pill">'+(data?.length||0)+' registros recientes · 22 columnas</span></div><div class="table-wrap" style="overflow-x:auto"><table class="expedientes-table" style="min-width:2200px"><thead><tr><th colspan="15" class="table-group-heading">DATOS ORIGINALES DEL EXCEL · 15 COLUMNAS</th><th colspan="7" class="table-group-heading">COLUMNAS ADICIONALES · REGLAS DE NEGOCIO</th></tr><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="22" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
   $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
 }
