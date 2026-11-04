@@ -59,7 +59,8 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
   const monthOpts=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===month?"selected":""}>${new Intl.DateTimeFormat("es-ES",{month:"long"}).format(new Date(2020,m-1,1))}</option>`).join("");
   const yearOpts=(years.length?years:[year]).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("");
   const firmaItems=grouped(monthRows,firma);
-  const centroItems=grouped(monthRows,r=>r.centro);\n  const entidadItems=grouped(monthRows,r=>r.tipo_entidad);
+  const centroItems=grouped(monthRows,r=>r.centro);
+  const entidadItems=grouped(monthRows,r=>r.tipo_entidad);
   const apoderadoItems=grouped(monthRows,r=>r.apoderado);
   const oficinaItems=grouped(monthRows,r=>{const code=String(r.oficina??"").trim();return code?(code==="5316"?"Cancela":"Oficina"):"";});
   h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Importar Excel</button>')
@@ -79,7 +80,9 @@ async function expedientes(h){  const columns=[
     ["contrato","CONTRATO"],["tipo_provision","TIPO PROVISIÓN"],["notario","NOTARIO"],
     ["provincia","PROVINCIA"],["municipio","MUNICIPIO"],["comunidad","COMUNIDAD"],
     ["protocolo","PROTOCOLO"],["fecha_protocolo","FECHA PROTOCOLO"],["vc","V.C."],
-    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"],\n    ["tipo_entidad","TIPO ENTIDAD"],["tipo_gestion","TIPO GESTIÓN"],["centro","CENTRO"],\n    ["circuito","CIRCUITO"],["tipo_firma","TIPO DE FIRMA"],["oficina_origen","OFICINA DE ORIGEN"]
+    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"],
+    ["tipo_entidad","TIPO ENTIDAD"],["tipo_gestion","TIPO GESTIÓN"],["centro","CENTRO"],
+    ["circuito","CIRCUITO"],["tipo_firma","TIPO DE FIRMA"],["oficina_origen","OFICINA DE ORIGEN"]
   ];
   const select=columns.map(c=>c[0]).join(",");
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
