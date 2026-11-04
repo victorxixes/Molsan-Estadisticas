@@ -517,8 +517,8 @@ function ruleConditionRow(condition,index){
   const operators=[["in","Es uno de"],["starts_with","Empieza por"],["lookup_notary_circuit","Buscar circuito en catálogo notarial"],["equals","Es igual a"],["not_equals","Es distinto de"],["contains","Contiene"],["empty","Está vacío"],["not_empty","No está vacío"],["greater_than","Mayor que"],["less_than","Menor que"]];
   const fields=ruleSourceFields.map(f=>'<option value="'+f[0]+'" '+(condition.campo===f[0]?"selected":"")+'>'+f[1]+'</option>').join("");
   const ops=operators.map(o=>'<option value="'+o[0]+'" '+((condition.operador||"in")===o[0]?"selected":"")+'>'+o[1]+'</option>').join("");
-  const sourceMode=condition.resultado==="$origen";
-  return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna original del Excel</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado</label><select data-rule-result-mode><option value="fixed" '+(!sourceMode?"selected":"")+'>Valor fijo</option><option value="source" '+(sourceMode?"selected":"")+'>Copiar valor de origen</option></select><input data-rule-result value="'+esc(sourceMode?"":condition.resultado||"")+'" placeholder="Resultado" '+(sourceMode?"disabled":"")+'></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
+  const sourceMode=condition.resultado==="$origen",lookupMode=condition.resultado==="$lookup_circuito_notarial";
+  return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna original del Excel</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado</label><select data-rule-result-mode><option value="fixed" '+(!sourceMode?"selected":"")+'>Valor fijo</option><option value="source" '+(sourceMode?"selected":"")+'>Copiar valor de origen</option><option value="lookup" '+(lookupMode?"selected":"")+'>Circuito del catálogo de notarios</option></select><input data-rule-result value="'+esc(sourceMode||lookupMode?"":condition.resultado||"")+'" placeholder="Resultado" '+(sourceMode||lookupMode?"disabled":"")+'></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
 }
 function collectRuleDefinition(){
   const conditions=$$(".rule-condition").map(row=>{
@@ -526,7 +526,7 @@ function collectRuleDefinition(){
     const raw=row.querySelector("[data-rule-values]").value.trim();
     const values=["empty","not_empty","lookup_notary_circuit"].includes(op)?[]:(["in","starts_with"].includes(op)?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
     const mode=row.querySelector("[data-rule-result-mode]")?.value||"fixed";
-    return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:mode==="source"?"$origen":row.querySelector("[data-rule-result]").value.trim()};
+    return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:mode==="source"?"$origen":mode==="lookup"?"$lookup_circuito_notarial":row.querySelector("[data-rule-result]").value.trim()};
   });
   const [targetType,targetId]=($("#rule-target").value||"").split(":");
   const destino=targetType==="registro"?{tipo:"registro",campo:targetId}:{tipo:"calculado",campo_id:targetId};
@@ -553,7 +553,7 @@ async function reglaModal(field,currentRule=null){
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
     $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)});
-    $$("[data-rule-result-mode]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value==="source"});
+    $$("[data-rule-result-mode]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value!=="fixed"});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
     const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
