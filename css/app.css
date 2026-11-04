@@ -99,8 +99,8 @@
 .evolution-table-wrap{max-width:100%;overflow:auto}
 .evolution-matrix{min-width:920px;font-variant-numeric:tabular-nums}
 .evolution-matrix thead th{text-align:center;vertical-align:middle}
-.evolution-matrix thead tr:first-child th{background:#dfeaf2;color:#064675}
-.evolution-matrix tbody th{background:#f8fbfd;text-align:left;font-size:11px;color:#35566d}
+.evolution-matrix thead tr:first-child th{background:#EAF2F8;color:#064675}
+.evolution-matrix tbody th{background:#F2F7FB;text-align:left;font-size:11px;color:#617789}
 .evolution-matrix td{font-size:11px;text-align:right}
 .evolution-matrix .total-col{background:#f2f7fb;font-weight:800}
 .evolution-matrix .report-total-row th,.evolution-matrix .report-total-row td{font-weight:800;border-top:2px solid #b9cedc}
