@@ -77,5 +77,4 @@
 
 .report-field-option{justify-content:space-between;min-width:0;padding:7px 9px;background:#fff;border:1px solid #d8e4ec;border-radius:8px}
 .report-field-option label{display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer}
-.field-order-actions{display:flex;gap:4px;flex-shrink:0}
-.field-order-actions .btn{min-width:27px;padding:4px 7px;line-height:1}
+.field-drag-handle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;height:28px;border:1px solid #d8e4ec;border-radius:7px;background:#f2f7fb;color:#617789;font-size:19px;line-height:1;cursor:grab;user-select:none;touch-action:none}.field-drag-handle:active{cursor:grabbing}.report-field-option.is-dragging{opacity:.45;border-style:dashed}.report-field-option:has(.field-drag-handle:focus-visible){outline:2px solid #064675;outline-offset:2px}
