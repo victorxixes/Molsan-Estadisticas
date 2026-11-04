@@ -428,8 +428,8 @@ async function campos(h){
   <section class="card"><div class="card-title"><div><h3>Diccionario de campos</h3><p>${data.length} campos definidos · ${data.filter(x=>x.activo).length} activos</p></div><button id="new-field" class="btn primary small">＋ Nuevo campo</button></div>
   <div class="table-wrap"><table><thead><tr><th>CÓDIGO</th><th>NOMBRE</th><th>TIPO</th><th>REGLA</th><th>DESCRIPCIÓN</th><th>ESTADO</th><th>ACCIONES</th></tr></thead><tbody>${data.length?data.map(x=>{const r=ruleMap.get(x.id);return `<tr><td>${esc(x.codigo)}</td><td><strong>${esc(x.nombre)}</strong></td><td>${esc(x.tipo_dato)}</td><td>${r?"v"+r.version+(r.active?" · Activa":" · Inactiva"):"Sin regla"}</td><td>${esc(x.descripcion||"—")}</td><td><span class="pill ${x.activo?"green":""}">${x.activo?"Activo":"Inactivo"}</span></td><td><div class="row-actions"><button class="btn secondary small" data-field-values="${x.id}">Resultados</button><button class="btn secondary small" data-edit-field="${x.id}">Editar</button></div></td></tr>`}).join(""):'<tr><td colspan="7" class="empty-row">Todavía no hay campos calculados. Crea el primero.</td></tr>'}</tbody></table></div></section>`;
   $("#new-field").onclick=()=>campoCalculadoModal();
-  $("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
-  $("[data-field-values]").forEach(b=>b.onclick=()=>campoValores(data.find(x=>x.id===b.dataset.fieldValues)));
+  $$("[data-edit-field]").forEach(b=>b.onclick=()=>campoCalculadoModal(data.find(x=>x.id===b.dataset.editField)));
+  $$("[data-field-values]").forEach(b=>b.onclick=()=>campoValores(data.find(x=>x.id===b.dataset.fieldValues)));
 }
 async function campoValores(field){
   if(!field)return;
@@ -554,8 +554,8 @@ async function reglaModal(field,currentRule=null){
   const close=()=>modal.remove();$("#rules-close").onclick=close;$("#rules-cancel").onclick=close;modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
-    $("[data-rule-operator]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)};s.onchange=sync;sync()});
-    $("[data-rule-result-mode]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value!=="fixed"};s.onchange=sync;sync()});
+    $$("[data-rule-operator]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty","lookup_notary_circuit"].includes(s.value)};s.onchange=sync;sync()});
+    $$("[data-rule-result-mode]").forEach(s=>{const sync=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value!=="fixed"};s.onchange=sync;sync()});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
     const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
