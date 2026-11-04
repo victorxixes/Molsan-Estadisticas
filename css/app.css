@@ -78,3 +78,35 @@
 .report-field-option{justify-content:space-between;min-width:0;padding:7px 9px;background:#fff;border:1px solid #d8e4ec;border-radius:8px}
 .report-field-option label{display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer}
 .field-drag-handle{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;height:28px;border:1px solid #d8e4ec;border-radius:7px;background:#f2f7fb;color:#617789;font-size:19px;line-height:1;cursor:grab;user-select:none;touch-action:none}.field-drag-handle:active{cursor:grabbing}.report-field-option.is-dragging{opacity:.45;border-style:dashed}.report-field-option:has(.field-drag-handle:focus-visible){outline:2px solid #064675;outline-offset:2px}
+
+
+/* Evolución global e interanual */
+.evolution-filter-card{margin-bottom:16px}
+.evolution-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.evolution-filter-grid .field{display:grid;gap:7px}
+.evolution-filter-grid .field span{font-size:11px;font-weight:700;color:#49667b}
+.evolution-filter-grid select{width:100%;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font-size:12px}
+.evolution-filter-grid select:disabled{background:#f5f8fa;color:#91a3af}
+.evolution-filter-note{margin:13px 0 0;color:var(--muted);font-size:10px;line-height:1.6}
+.evolution-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:15px;padding-top:14px;border-top:1px solid #edf2f5}
+.evolution-kpis{grid-template-columns:repeat(4,minmax(0,1fr));margin:16px 0}
+.evolution-chart-card,.evolution-table-card{margin-top:16px}
+.evolution-chart{min-width:0}
+.evolution-svg{width:100%;height:auto;display:block;overflow:visible}
+.evolution-legend{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:9px 0 0}
+.evolution-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#587286}
+.evolution-legend-item i{display:inline-block;width:9px;height:9px;border-radius:50%}
+.evolution-table-wrap{max-width:100%;overflow:auto}
+.evolution-matrix{min-width:920px;font-variant-numeric:tabular-nums}
+.evolution-matrix thead th{text-align:center;vertical-align:middle}
+.evolution-matrix thead tr:first-child th{background:#dfeaf2;color:#064675}
+.evolution-matrix tbody th{background:#f8fbfd;text-align:left;font-size:11px;color:#35566d}
+.evolution-matrix td{font-size:11px;text-align:right}
+.evolution-matrix .total-col{background:#f2f7fb;font-weight:800}
+.evolution-matrix .report-total-row th,.evolution-matrix .report-total-row td{font-weight:800;border-top:2px solid #b9cedc}
+.evolution-comparable-row th,.evolution-comparable-row td{background:#edf5fa;font-weight:800;border-top:2px solid #b9cedc}
+.evolution-positive{color:#218064!important}
+.evolution-negative{color:#b44b45!important}
+.evolution-empty{color:#b0bdc6!important}
+@media(max-width:900px){.evolution-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.evolution-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.evolution-filter-grid{grid-template-columns:1fr}.evolution-kpis{grid-template-columns:1fr 1fr}.evolution-actions .btn{flex:1}.evolution-chart-card{overflow:hidden}}
