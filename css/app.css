@@ -123,3 +123,41 @@
 .evolution-report-section .evolution-matrix td,.evolution-report-section .evolution-matrix th{font-size:9px;padding:6px 7px}
 @media(max-width:700px){.evolution-report-kpis{grid-template-columns:1fr 1fr}}
 @media print{.evolution-report-section{break-before:page;page-break-before:always}.evolution-report-section .report-table-wrap{overflow:visible}.evolution-report-section .evolution-matrix{min-width:0;width:100%}}
+
+
+/* Acta de reunión · diseñador y documento */
+.acta-admin-layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);gap:18px;align-items:start}
+.acta-editor-card,.acta-preview-card,.acta-saved-card{min-width:0}
+.acta-editor-tabs{display:flex;gap:7px;border-bottom:1px solid var(--line);margin:0 0 18px;padding-bottom:10px}
+.acta-editor-tabs button{border:1px solid transparent;background:transparent;color:var(--muted);font-weight:700;padding:9px 13px;border-radius:9px}
+.acta-editor-tabs button.active{background:var(--ice);color:var(--blue);border-color:var(--line)}
+.acta-tab-panel.hidden{display:none}
+.acta-attendee-editor{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+.acta-attendee-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;gap:9px;margin:9px 0}
+.acta-attendee-row input{width:100%;min-width:0;border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.acta-block-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:#fff}
+.acta-block-row label{display:flex;align-items:center;gap:9px;font-weight:650}
+.acta-block-row>div{display:flex;gap:6px}
+.acta-preview-panel{display:grid;gap:16px;min-width:0}
+.acta-preview-card{overflow:hidden}
+#acta-preview{background:#eef3f7;padding:16px;max-height:1100px;overflow:auto}
+.acta-document{background:#fff;color:var(--acta-ink);font-family:var(--acta-font);font-size:var(--acta-size);line-height:1.55;padding:34px 38px;max-width:100%;min-height:600px;box-shadow:0 5px 22px rgba(15,55,83,.09)}
+.acta-doc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-bottom:18px;border-bottom:2px solid var(--acta-primary)}
+.acta-doc-logo{max-width:115px;max-height:54px;object-fit:contain}
+.acta-company{display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right;font-size:.88em}
+.acta-company strong{font-size:1.12em;color:var(--acta-primary);margin-bottom:4px}
+.acta-document>h1{text-align:center;color:var(--acta-primary);font-size:1.4em;line-height:1.3;margin:28px 0}
+.acta-doc-section{margin:20px 0;break-inside:avoid}
+.acta-doc-section h3{font-size:1.02em;color:var(--acta-primary);background:var(--acta-head);border-left:3px solid var(--acta-primary);padding:8px 11px;margin:0 0 10px}
+.acta-doc-section:has(>p:first-child):not(:has(h3)) p{margin:0 0 8px}
+.acta-doc-section p{margin:7px 0;white-space:pre-wrap}
+.acta-attendee-table{width:100%;border-collapse:collapse;margin-top:10px}
+.acta-attendee-table th,.acta-attendee-table td{border:1px solid #d8e4ec;padding:8px 10px;text-align:left}
+.acta-attendee-table th{background:var(--acta-head);color:var(--acta-primary)}
+.acta-signatures{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin:30px 0 10px;text-align:center}
+.acta-sign-line{height:55px;border-bottom:1px solid #8799a6;margin:8px 12px}
+.acta-doc-footer{border-top:1px solid #d8e4ec;margin-top:30px;padding-top:9px;text-align:center;color:#71899a;font-size:.82em}
+.acta-saved-card{margin-top:0}
+@media(max-width:1120px){.acta-admin-layout{grid-template-columns:1fr}.acta-preview-panel{grid-template-columns:1fr}}
+@media(max-width:640px){.acta-attendee-row{grid-template-columns:1fr}.acta-attendee-row button{justify-self:end}.acta-document{padding:22px 18px}.acta-doc-header{flex-direction:column}.acta-company{align-items:flex-start;text-align:left}.acta-signatures{grid-template-columns:1fr}#acta-preview{padding:8px}}
+@media print{.acta-document{box-shadow:none;max-width:none;padding:0}.acta-doc-section,.acta-attendee-table{break-inside:avoid}}
