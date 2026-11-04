@@ -66,7 +66,7 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
   const oficinaItems=grouped(monthRows,r=>{const code=String(r.oficina??"").trim();return code?(code==="5316"?"Cancela":"Oficina"):"";});
   const circuitoItems=grouped(monthRows,r=>r.circuito_notarial);
   const tipoGestionItems=grouped(monthRows,r=>r.tipo_gestion);
-  h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Importar Excel</button>')
+  h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button>')
     +`<section class="card dash-filter-card"><div><strong>Periodo de análisis</strong><small>Compara el mes seleccionado con el inmediatamente anterior</small></div><div class="dash-filters"><label>Mes<select id="dash-month">${monthOpts}</select></label><label>Año<select id="dash-year">${yearOpts}</select></label></div></section>`
     +`<div class="grid kpi-grid dash-kpis">${kpi("▤","Expedientes del mes",monthRows.length.toLocaleString("es-ES"),titleMonth)}${kpi("↗","Mes anterior",previousRows.length.toLocaleString("es-ES"),titlePrevious)}${kpi(delta>=0?"↑":"↓","Variación",previousRows.length?(delta>0?"+":"")+delta:"—",deltaText)}${kpi("✍","Apoderados activos",new Set(monthRows.map(r=>r.nombre_apoderado||r.apoderado).filter(Boolean)).size.toLocaleString("es-ES"),"Con expedientes en el periodo")}</div>`
     +`<div class="dash-section-heading"><div><h2>Actividad de firma</h2><p>Distribución de los expedientes del periodo seleccionado</p></div><span class="pill">${monthRows.length} registros</span></div>`
@@ -94,7 +94,7 @@ async function expedientes(h){  const originalColumns=[
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
   if(error)throw error;
   const rows=(data||[]).map(r=>"<tr>"+columns.map((c,i)=>"<td>"+(i===0?"<strong>":"")+esc(r[c[0]]??"—")+(i===0?"</strong>":"")+"</td>").join("")+"</tr>").join("");
-  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales del Excel y las 7 columnas adicionales generadas por reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
+  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales del Excel y las 7 columnas adicionales generadas por reglas de negocio.")
     +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en cualquiera de las 22 columnas…"><span class="pill">'+(data?.length||0)+' registros recientes · 22 columnas</span></div><div class="table-wrap" style="overflow-x:auto"><table class="expedientes-table" style="min-width:2200px"><thead><tr><th colspan="15" class="table-group-heading">DATOS ORIGINALES DEL EXCEL · 15 COLUMNAS</th><th colspan="7" class="table-group-heading">COLUMNAS ADICIONALES · REGLAS DE NEGOCIO</th></tr><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="22" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
   $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
