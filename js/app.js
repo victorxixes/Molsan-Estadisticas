@@ -284,7 +284,7 @@ async function importacion(h){
     }catch(e){
       if(batchId){
         await sb.from("estadisticas_importaciones").update({
-          estado:"error_preparacion",filas_rechazadas:validationErrors,
+          estado:"error_preparacion",filas_leidas:inserted,filas_rechazadas:validationErrors,
           resumen_validacion:{filas_preparadas:inserted,filas_con_errores:validationErrors,error:e.message}
         }).eq("id",batchId);
       }
