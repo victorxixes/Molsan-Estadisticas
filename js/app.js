@@ -14,7 +14,7 @@ async function count(t){let {count,error}=await sb.from(t).select("*",{count:"ex
 async function setView(v){view=v;$("#crumb-current").textContent=titles[v];$$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));await render()}
 async function render(){let h=$("#view-container");h.innerHTML='<div class="notice">Consultando Supabase…</div>';try{if(view==="dashboard")await dashboard(h);else if(view==="expedientes")await expedientes(h);else if(view==="notarios")await notarios(h);else if(view==="importacion")await importacion(h);else if(view==="catalogos")await catalogosView(h);else if(view==="campos")await campos(h);else if(view==="reglas")await reglas(h);else if(view==="ajustes")ajustes(h);else informes(h)}catch(e){h.innerHTML=head(titles[view],"No se pudo cargar esta sección.")+`<div class="notice">${esc(e.message)}</div>`}}
 async function dashboard(h,selectedMonth=null,selectedYear=null){
-  const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro,apoderado,oficina_origen,oficina,tipo_entidad,tipo_gestion";
+  const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro_encargo,nombre_apoderado,centro_firma,entidad,circuito_notarial,tipo_gestion,apoderado,oficina";
   let all=[],from=0,batch=1000;
   while(true){
     const {data,error}=await sb.from("estadisticas_registros").select(fields).not("fecha_protocolo","is",null).order("fecha_protocolo",{ascending:false}).range(from,from+batch-1);
@@ -59,15 +59,16 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
   const monthOpts=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===month?"selected":""}>${new Intl.DateTimeFormat("es-ES",{month:"long"}).format(new Date(2020,m-1,1))}</option>`).join("");
   const yearOpts=(years.length?years:[year]).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("");
   const firmaItems=grouped(monthRows,firma);
-  const centroItems=grouped(monthRows,r=>r.centro);
-  const entidadItems=grouped(monthRows,r=>r.tipo_entidad);
-  const apoderadoItems=grouped(monthRows,r=>r.apoderado);
+  const centroItems=grouped(monthRows,r=>r.centro_firma);
+  const centroEncargoItems=grouped(monthRows,r=>r.centro_encargo);
+  const entidadItems=grouped(monthRows,r=>r.entidad);
+  const apoderadoItems=grouped(monthRows,r=>r.nombre_apoderado||r.apoderado);
   const oficinaItems=grouped(monthRows,r=>{const code=String(r.oficina??"").trim();return code?(code==="5316"?"Cancela":"Oficina"):"";});
   h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Importar Excel</button>')
     +`<section class="card dash-filter-card"><div><strong>Periodo de análisis</strong><small>Compara el mes seleccionado con el inmediatamente anterior</small></div><div class="dash-filters"><label>Mes<select id="dash-month">${monthOpts}</select></label><label>Año<select id="dash-year">${yearOpts}</select></label></div></section>`
-    +`<div class="grid kpi-grid dash-kpis">${kpi("▤","Expedientes del mes",monthRows.length.toLocaleString("es-ES"),titleMonth)}${kpi("↗","Mes anterior",previousRows.length.toLocaleString("es-ES"),titlePrevious)}${kpi(delta>=0?"↑":"↓","Variación",previousRows.length?(delta>0?"+":"")+delta:"—",deltaText)}${kpi("✍","Apoderados activos",new Set(monthRows.map(r=>r.apoderado).filter(Boolean)).size.toLocaleString("es-ES"),"Con expedientes en el periodo")}</div>`
+    +`<div class="grid kpi-grid dash-kpis">${kpi("▤","Expedientes del mes",monthRows.length.toLocaleString("es-ES"),titleMonth)}${kpi("↗","Mes anterior",previousRows.length.toLocaleString("es-ES"),titlePrevious)}${kpi(delta>=0?"↑":"↓","Variación",previousRows.length?(delta>0?"+":"")+delta:"—",deltaText)}${kpi("✍","Apoderados activos",new Set(monthRows.map(r=>r.nombre_apoderado||r.apoderado).filter(Boolean)).size.toLocaleString("es-ES"),"Con expedientes en el periodo")}</div>`
     +`<div class="dash-section-heading"><div><h2>Actividad de firma</h2><p>Distribución de los expedientes del periodo seleccionado</p></div><span class="pill">${monthRows.length} registros</span></div>`
-    +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Actividad por apoderado","Quién firma cada expediente",apoderadoItems,monthRows.length)}${list("Clasificación por oficina","5316 = Cancela · cualquier otro código = Oficina",oficinaItems,monthRows.length)}${list("Tipo de entidad","Clasificación calculada mediante reglas activas",entidadItems,monthRows.length)}</div>`
+    +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro de encargo","Distribución por centro solicitante",centroEncargoItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Nombre del apoderado","Distribución por apoderado",apoderadoItems,monthRows.length)}${list("Entidad","Clasificación calculada mediante reglas activas",entidadItems,monthRows.length)}${list("Clasificación por oficina","5316 = Cancela · cualquier otro código = Oficina",oficinaItems,monthRows.length)}</div>`
     +`<section class="card dash-comparison"><div class="card-title"><div><h3>Comparativa mensual</h3><p>${titleMonth} frente a ${titlePrevious}</p></div><span class="pill">${previousRows.length?"Comparación disponible":"Pendiente de histórico"}</span></div><div class="dash-compare-grid"><div><small>${titleMonth}</small><strong>${monthRows.length}</strong><span>Expedientes</span></div><div><small>${titlePrevious}</small><strong>${previousRows.length}</strong><span>Expedientes</span></div><div><small>Diferencia</small><strong class="${delta>0?"positive":delta<0?"negative":""}">${previousRows.length?(delta>0?"+":"")+delta:"—"}</strong><span>${previousRows.length?(delta>0?"Más expedientes":delta<0?"Menos expedientes":"Sin variación"):"No hay datos del mes anterior"}</span></div></div></section>`
     +`<div class="dash-footnote">El periodo se determina por la fecha de protocolo. Los centros y las oficinas de origen que todavía no estén identificados aparecen como pendientes, sin atribuciones automáticas.</div>`;
   $("#dash-refresh").onclick=()=>dashboard(h,month,year);
@@ -81,15 +82,15 @@ async function expedientes(h){  const columns=[
     ["provincia","PROVINCIA"],["municipio","MUNICIPIO"],["comunidad","COMUNIDAD"],
     ["protocolo","PROTOCOLO"],["fecha_protocolo","FECHA PROTOCOLO"],["vc","V.C."],
     ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"],
-    ["tipo_entidad","TIPO ENTIDAD"],["tipo_gestion","TIPO GESTIÓN"],["centro","CENTRO"],
-    ["circuito","CIRCUITO"],["tipo_firma","TIPO DE FIRMA"],["oficina_origen","OFICINA DE ORIGEN"]
+    ["centro_encargo","CENTRO DE ENCARGO"],["tipo_gestion","TIPO GESTIÓN"],["nombre_apoderado","NOMBRE DEL APODERADO"],
+    ["centro_firma","CENTRO QUE FIRMA"],["entidad","ENTIDAD"],["circuito_notarial","CIRCUITO NOTARIAL"],["tipo_firma","TIPO DE FIRMA"]
   ];
   const select=columns.map(c=>c[0]).join(",");
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
   if(error)throw error;
   const rows=(data||[]).map(r=>"<tr>"+columns.map((c,i)=>"<td>"+(i===0?"<strong>":"")+esc(r[c[0]]??"—")+(i===0?"</strong>":"")+"</td>").join("")+"</tr>").join("");
   h.innerHTML=head("Expedientes","Consulta las 15 columnas originales y los campos calculados por reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
-    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en las columnas originales y calculadas…"><span class="pill">'+(data?.length||0)+' registros recientes · columnas originales + calculadas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="21" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
+    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en las columnas originales y calculadas…"><span class="pill">'+(data?.length||0)+' registros recientes · columnas originales + calculadas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="22" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
   $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
 }
@@ -441,18 +442,17 @@ async function campoValores(field){
 }
 
 const ruleSourceFields=[
-  ["contrato","Contrato"],["apoderado","Apoderado"],["oficina","Oficina"],["fecha_alta","Fecha alta"],
+  ["expediente","Expediente"],["oficina","Oficina"],["fecha_alta","Fecha alta"],["contrato","Contrato"],
   ["tipo_provision","Tipo provisión"],["notario","Notario"],["provincia","Provincia"],["municipio","Municipio"],
   ["comunidad","Comunidad"],["protocolo","Protocolo"],["fecha_protocolo","Fecha protocolo"],["vc","V.C."],
-  ["envio_notario","Envío notario"],["dias_excel","Días"],["centro","Centro"],["circuito","Circuito"],
-  ["tipo_firma","Tipo de firma"],["oficina_origen","Oficina de origen"],["tipo_gestion","Tipo de gestión"]
+  ["apoderado","Apoderado"],["envio_notario","Envío notario"],["dias_excel","Días"]
 ];
 const ruleTargetFields=[
-  ["tipo_entidad","Tipo de entidad"],["tipo_gestion","Tipo de gestión"],["centro","Centro"],
-  ["circuito","Circuito"],["tipo_firma","Tipo de firma"],["oficina_origen","Oficina de origen"]
+  ["centro_encargo","Centro de encargo"],["tipo_gestion","Tipo Gestión"],["nombre_apoderado","Nombre del apoderado"],
+  ["centro_firma","Centro que firma"],["entidad","Entidad"],["circuito_notarial","Circuito notarial"],["tipo_firma","Tipo de firma"]
 ];
 function defaultEntityRule(){
-  return {schema:1,logica:"AND",destino:{tipo:"registro",campo:"tipo_entidad"},condiciones:[
+  return {schema:1,logica:"AND",destino:{tipo:"registro",campo:"entidad"},condiciones:[
     {campo:"contrato",operador:"in",valores:["9272","9320","9620"],resultado:"Caixabank"},
     {campo:"apoderado",operador:"in",valores:["Colaboradores","Molsan"],resultado:"Caixabank"}
   ],por_defecto:"Otra entidad"};
@@ -474,22 +474,13 @@ function evaluateRuleDefinition(record,definition){
   if(!conditions.length)return definition?.por_defecto??null;
   const matches=conditions.filter(c=>ruleConditionMatches(record,c));
   const passed=definition.logica==="AND"?matches.length===conditions.length:matches.length>0;
-  return passed?(matches[0]?.resultado??definition.por_defecto??null):(definition.por_defecto??null);
+  return passed?(matches[0]?.resultado==="$origen"?String(record?.[matches[0]?.campo]??""):(matches[0]?.resultado??definition.por_defecto??null)):(definition.por_defecto??null);
 }
 async function ensureEntityRule(){
-  let {data:fields,error}=await sb.from("estadisticas_campos_calculados").select("*").eq("codigo","tipo_entidad").limit(1);
+  const {data:fields,error}=await sb.from("estadisticas_campos_calculados").select("*").eq("codigo","entidad").limit(1);
   if(error)throw error;
-  let field=fields?.[0];
-  if(!field){
-    const created=await sb.from("estadisticas_campos_calculados").insert({codigo:"tipo_entidad",nombre:"Tipo de entidad",tipo_dato:"texto",descripcion:"Clasificación de la entidad a partir del contrato y el apoderado.",activo:true,orden:10}).select("*").single();
-    if(created.error)throw created.error;field=created.data;
-  }
-  const {data:rules,error:ruleError}=await sb.from("estadisticas_reglas_calculo").select("id").eq("campo_id",field.id).limit(1);
-  if(ruleError)throw ruleError;
-  if(!rules?.length){
-    const {error:insertError}=await sb.from("estadisticas_reglas_calculo").insert({campo_id:field.id,version:1,definicion:defaultEntityRule(),activa:true,motor:"expresion_v1",notas:"Regla inicial acordada: contrato 9272, 9320 o 9620 Y apoderado Colaboradores o Molsan = Caixabank. Resto = Otra entidad."});
-    if(insertError)throw insertError;
-  }
+  const field=fields?.[0];
+  if(!field)throw new Error("No está configurado el campo de destino Entidad. Comprueba la migración de columnas adicionales.");
   return field;
 }
 async function reglas(h){
@@ -521,14 +512,16 @@ function ruleConditionRow(condition,index){
   const operators=[["in","Es uno de"],["equals","Es igual a"],["not_equals","Es distinto de"],["contains","Contiene"],["empty","Está vacío"],["not_empty","No está vacío"],["greater_than","Mayor que"],["less_than","Menor que"]];
   const fields=ruleSourceFields.map(f=>'<option value="'+f[0]+'" '+(condition.campo===f[0]?"selected":"")+'>'+f[1]+'</option>').join("");
   const ops=operators.map(o=>'<option value="'+o[0]+'" '+((condition.operador||"in")===o[0]?"selected":"")+'>'+o[1]+'</option>').join("");
-  return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna de origen</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado si coincide</label><input data-rule-result value="'+esc(condition.resultado||"")+'" placeholder="Resultado"></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
+  const sourceMode=condition.resultado==="$origen";
+  return '<div class="rule-condition" data-rule-condition="'+index+'"><div class="field"><label>Columna de origen</label><select data-rule-field>'+fields+'</select></div><div class="field"><label>Condición</label><select data-rule-operator>'+ops+'</select></div><div class="field rule-values-field"><label>Valor(es)</label><input data-rule-values value="'+esc((condition.valores||[]).join(", "))+'" placeholder="Separar varios valores con comas"></div><div class="field"><label>Resultado</label><select data-rule-result-mode><option value="fixed" '+(!sourceMode?"selected":"")+'>Valor fijo</option><option value="source" '+(sourceMode?"selected":"")+'>Copiar valor de origen</option></select><input data-rule-result value="'+esc(sourceMode?"":condition.resultado||"")+'" placeholder="Resultado" '+(sourceMode?"disabled":"")+'></div><button type="button" class="btn danger small rule-remove" data-rule-remove="'+index+'" title="Eliminar condición">×</button></div>';
 }
 function collectRuleDefinition(){
   const conditions=$$(".rule-condition").map(row=>{
     const op=row.querySelector("[data-rule-operator]").value;
     const raw=row.querySelector("[data-rule-values]").value.trim();
     const values=op==="empty"||op==="not_empty"?[]:(op==="in"?raw.split(",").map(x=>x.trim()).filter(Boolean):(raw?[raw]:[]));
-    return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:row.querySelector("[data-rule-result]").value.trim()};
+    const mode=row.querySelector("[data-rule-result-mode]")?.value||"fixed";
+    return {campo:row.querySelector("[data-rule-field]").value,operador:op,valores:values,resultado:mode==="source"?"$origen":row.querySelector("[data-rule-result]").value.trim()};
   });
   const [targetType,targetId]=($("#rule-target").value||"").split(":");
   const destino=targetType==="registro"?{tipo:"registro",campo:targetId}:{tipo:"calculado",campo_id:targetId};
@@ -554,6 +547,7 @@ async function reglaModal(field,currentRule=null){
   const bindRows=()=>{
     $$("[data-rule-remove]").forEach(b=>b.onclick=()=>{b.closest(".rule-condition").remove()});
     $$("[data-rule-operator]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-values]");v.disabled=["empty","not_empty"].includes(s.value)});
+    $$("[data-rule-result-mode]").forEach(s=>s.onchange=()=>{const v=s.closest(".rule-condition").querySelector("[data-rule-result]");v.disabled=s.value==="source"});
   };
   const addCondition=(c={campo:"contrato",operador:"in",valores:[],resultado:""})=>{
     const list=$("#rule-condition-list"),index=list.querySelectorAll(".rule-condition").length,wrap=document.createElement("div");wrap.innerHTML=ruleConditionRow(c,index);list.append(wrap.firstElementChild);bindRows();
@@ -567,7 +561,7 @@ async function reglaModal(field,currentRule=null){
     e.preventDefault();const save=$("#rules-save");save.disabled=true;save.textContent="Guardando…";
     const d=collectRuleDefinition();
     if(!d.destino.campo&&!d.destino.campo_id){msg("Selecciona una columna de destino.");save.disabled=false;save.textContent="Guardar y activar versión";return}
-    if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||!c.resultado||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
+    if(!d.condiciones.length||d.condiciones.some(c=>!c.campo||(!c.resultado&&c.resultado!=="$origen")||(!["empty","not_empty"].includes(c.operador)&&!c.valores.length))){msg("Completa todas las condiciones y sus resultados.");save.disabled=false;save.textContent="Guardar y activar versión";return}
     const now=new Date().toISOString();
     try{
       const version=(history||[]).reduce((m,r)=>Math.max(m,r.version||0),0)+1;
@@ -583,7 +577,7 @@ async function reglaModal(field,currentRule=null){
 }
 async function previewRule(field,definition,target){
   const columns=ruleSourceFields.map(x=>x[0]).join(",");
-  const {data,error}=await sb.from("estadisticas_registros").select("id,expediente,"+columns).limit(5000);
+  const {data,error}=await sb.from("estadisticas_registros").select("id,"+columns).limit(5000);
   if(error)throw error;
   const rows=data||[],counts={};
   const results=rows.map(r=>{const value=evaluateRuleDefinition(r,definition);const label=String(value??"Sin resultado");counts[label]=(counts[label]||0)+1;return {...r,_rule_value:label}});
