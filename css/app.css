@@ -112,7 +112,7 @@
 @media(max-width:560px){.evolution-filter-grid{grid-template-columns:1fr}.evolution-kpis{grid-template-columns:1fr 1fr}.evolution-actions .btn{flex:1}.evolution-chart-card{overflow:hidden}}
 
 
-.evolution-report-section{break-before:page;page-break-before:always;padding-top:18px}
+.evolution-report-section{break-before:page;page-break-before:always;padding-top:22px}.evolution-report-section .evolution-matrix{font-size:var(--report-font-size,10px)}.evolution-report-section .evolution-matrix thead th{background:var(--report-header);color:var(--report-primary)}.evolution-report-section .evolution-matrix thead th:first-child{background:var(--report-primary);color:#fff}.evolution-report-section .evolution-matrix tbody th{background:#fff;color:var(--report-text)}.evolution-report-section .evolution-matrix .report-total-row th,.evolution-report-section .evolution-matrix .report-total-row td{background:var(--report-header);border-top:2px solid var(--report-primary)}
 .evolution-report-title{margin:12px 0;color:#064675;font-size:17px}
 .evolution-report-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 18px}
 .evolution-report-kpis>div{padding:12px;border:1px solid #d8e4ec;border-radius:10px;background:#f2f7fb}
