@@ -14,7 +14,7 @@ async function count(t){let {count,error}=await sb.from(t).select("*",{count:"ex
 async function setView(v){view=v;$("#crumb-current").textContent=titles[v];$$(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===v));await render()}
 async function render(){let h=$("#view-container");h.innerHTML='<div class="notice">Consultando Supabase…</div>';try{if(view==="dashboard")await dashboard(h);else if(view==="expedientes")await expedientes(h);else if(view==="notarios")await notarios(h);else if(view==="importacion")await importacion(h);else if(view==="catalogos")await catalogosView(h);else if(view==="campos")await campos(h);else if(view==="reglas")await reglas(h);else if(view==="ajustes")ajustes(h);else informes(h)}catch(e){h.innerHTML=head(titles[view],"No se pudo cargar esta sección.")+`<div class="notice">${esc(e.message)}</div>`}}
 async function dashboard(h,selectedMonth=null,selectedYear=null){
-  const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro,apoderado,oficina_origen,oficina";
+  const fields="id,fecha_protocolo,fecha_alta,vc,tipo_firma,centro,apoderado,oficina_origen,oficina,tipo_entidad,tipo_gestion";
   let all=[],from=0,batch=1000;
   while(true){
     const {data,error}=await sb.from("estadisticas_registros").select(fields).not("fecha_protocolo","is",null).order("fecha_protocolo",{ascending:false}).range(from,from+batch-1);
@@ -59,14 +59,14 @@ async function dashboard(h,selectedMonth=null,selectedYear=null){
   const monthOpts=Array.from({length:12},(_,i)=>i+1).map(m=>`<option value="${m}" ${m===month?"selected":""}>${new Intl.DateTimeFormat("es-ES",{month:"long"}).format(new Date(2020,m-1,1))}</option>`).join("");
   const yearOpts=(years.length?years:[year]).map(y=>`<option value="${y}" ${y===year?"selected":""}>${y}</option>`).join("");
   const firmaItems=grouped(monthRows,firma);
-  const centroItems=grouped(monthRows,r=>r.centro);
+  const centroItems=grouped(monthRows,r=>r.centro);\n  const entidadItems=grouped(monthRows,r=>r.tipo_entidad);
   const apoderadoItems=grouped(monthRows,r=>r.apoderado);
   const oficinaItems=grouped(monthRows,r=>{const code=String(r.oficina??"").trim();return code?(code==="5316"?"Cancela":"Oficina"):"";});
   h.innerHTML=head("Dashboard","Actividad de expedientes, firmas y rendimiento por centro, apoderado y oficina.",'<button class="btn secondary small" id="dash-refresh">↻ Actualizar</button><button class="btn primary small" data-goto="importacion">＋ Importar Excel</button>')
     +`<section class="card dash-filter-card"><div><strong>Periodo de análisis</strong><small>Compara el mes seleccionado con el inmediatamente anterior</small></div><div class="dash-filters"><label>Mes<select id="dash-month">${monthOpts}</select></label><label>Año<select id="dash-year">${yearOpts}</select></label></div></section>`
     +`<div class="grid kpi-grid dash-kpis">${kpi("▤","Expedientes del mes",monthRows.length.toLocaleString("es-ES"),titleMonth)}${kpi("↗","Mes anterior",previousRows.length.toLocaleString("es-ES"),titlePrevious)}${kpi(delta>=0?"↑":"↓","Variación",previousRows.length?(delta>0?"+":"")+delta:"—",deltaText)}${kpi("✍","Apoderados activos",new Set(monthRows.map(r=>r.apoderado).filter(Boolean)).size.toLocaleString("es-ES"),"Con expedientes en el periodo")}</div>`
     +`<div class="dash-section-heading"><div><h2>Actividad de firma</h2><p>Distribución de los expedientes del periodo seleccionado</p></div><span class="pill">${monthRows.length} registros</span></div>`
-    +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Actividad por apoderado","Quién firma cada expediente",apoderadoItems,monthRows.length)}${list("Clasificación por oficina","5316 = Cancela · cualquier otro código = Oficina",oficinaItems,monthRows.length)}</div>`
+    +`<div class="grid dash-analysis-grid">${list("Expedientes por tipo de firma","Videoconferencia y presencial",firmaItems,monthRows.length)}${list("Centro que firma","Distribución por centro firmante",centroItems,monthRows.length)}${list("Actividad por apoderado","Quién firma cada expediente",apoderadoItems,monthRows.length)}${list("Clasificación por oficina","5316 = Cancela · cualquier otro código = Oficina",oficinaItems,monthRows.length)}${list("Tipo de entidad","Clasificación calculada mediante reglas activas",entidadItems,monthRows.length)}</div>`
     +`<section class="card dash-comparison"><div class="card-title"><div><h3>Comparativa mensual</h3><p>${titleMonth} frente a ${titlePrevious}</p></div><span class="pill">${previousRows.length?"Comparación disponible":"Pendiente de histórico"}</span></div><div class="dash-compare-grid"><div><small>${titleMonth}</small><strong>${monthRows.length}</strong><span>Expedientes</span></div><div><small>${titlePrevious}</small><strong>${previousRows.length}</strong><span>Expedientes</span></div><div><small>Diferencia</small><strong class="${delta>0?"positive":delta<0?"negative":""}">${previousRows.length?(delta>0?"+":"")+delta:"—"}</strong><span>${previousRows.length?(delta>0?"Más expedientes":delta<0?"Menos expedientes":"Sin variación"):"No hay datos del mes anterior"}</span></div></div></section>`
     +`<div class="dash-footnote">El periodo se determina por la fecha de protocolo. Los centros y las oficinas de origen que todavía no estén identificados aparecen como pendientes, sin atribuciones automáticas.</div>`;
   $("#dash-refresh").onclick=()=>dashboard(h,month,year);
@@ -79,14 +79,14 @@ async function expedientes(h){  const columns=[
     ["contrato","CONTRATO"],["tipo_provision","TIPO PROVISIÓN"],["notario","NOTARIO"],
     ["provincia","PROVINCIA"],["municipio","MUNICIPIO"],["comunidad","COMUNIDAD"],
     ["protocolo","PROTOCOLO"],["fecha_protocolo","FECHA PROTOCOLO"],["vc","V.C."],
-    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"]
+    ["apoderado","APODERADO"],["envio_notario","ENVÍO NOTARIO"],["dias_excel","DÍAS"],\n    ["tipo_entidad","TIPO ENTIDAD"],["tipo_gestion","TIPO GESTIÓN"],["centro","CENTRO"],\n    ["circuito","CIRCUITO"],["tipo_firma","TIPO DE FIRMA"],["oficina_origen","OFICINA DE ORIGEN"]
   ];
   const select=columns.map(c=>c[0]).join(",");
   const {data,error}=await sb.from("estadisticas_registros").select(select).order("fecha_alta",{ascending:false}).limit(500);
   if(error)throw error;
   const rows=(data||[]).map(r=>"<tr>"+columns.map((c,i)=>"<td>"+(i===0?"<strong>":"")+esc(r[c[0]]??"—")+(i===0?"</strong>":"")+"</td>").join("")+"</tr>").join("");
-  h.innerHTML=head("Expedientes","Consulta los 15 campos del Excel mensual en cada registro.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
-    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en cualquiera de las 15 columnas…"><span class="pill">'+(data?.length||0)+' registros recientes · 15 columnas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="15" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
+  h.innerHTML=head("Expedientes","Consulta las 15 columnas originales y los campos calculados por reglas de negocio.",'<button class="btn secondary small" data-goto="importacion">⇧ Importar Excel</button>')
+    +'<section class="card"><div class="toolbar"><input id="search-exp" class="search-input" placeholder="Buscar en las columnas originales y calculadas…"><span class="pill">'+(data?.length||0)+' registros recientes · columnas originales + calculadas</span></div><div class="table-wrap"><table><thead><tr>'+columns.map(c=>"<th>"+c[1]+"</th>").join("")+'</tr></thead><tbody id="rows-exp">'+(rows||'<tr><td colspan="21" class="empty-row">Aún no hay expedientes. Importa tu primer Excel.</td></tr>')+'</tbody></table></div></section>';
   wire();
   $("#search-exp").oninput=e=>$$('#rows-exp tr').forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
 }
